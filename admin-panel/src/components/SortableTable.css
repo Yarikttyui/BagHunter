@@ -1,0 +1,132 @@
+.sortable-table-container {
+  overflow-x: auto;
+  border-radius: 22px;
+  background: linear-gradient(150deg, rgba(13, 20, 44, 0.75) 0%, rgba(28, 39, 78, 0.70) 100%);
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  box-shadow: 0 18px 38px rgba(6, 11, 30, 0.45);
+  backdrop-filter: blur(26px);
+  -webkit-backdrop-filter: blur(26px);
+  position: relative;
+  padding: 4px;
+}
+
+.sortable-table {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.95);
+  background: transparent;
+}
+
+.sortable-table th {
+  padding: 18px 22px;
+  text-align: left;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #ffffff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+}
+
+.sortable-table th.sortable {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.sortable-table th.sortable:hover {
+  color: #fffbfb;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.th-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sort-icon {
+  font-size: 14px;
+  opacity: 0.4;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.sort-icon.active {
+  opacity: 1;
+  color: #ffe27a;
+  transform: translateY(-1px);
+}
+
+.sortable-table tbody tr {
+  transition: background 0.25s ease, transform 0.25s ease;
+  background: rgba(18, 25, 54, 0.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sortable-table tbody tr:nth-child(even) {
+  background: rgba(24, 35, 68, 0.35);
+}
+
+.sortable-table tbody tr:hover {
+  transform: translateX(4px);
+  background: rgba(102, 126, 234, 0.22);
+}
+
+.sortable-table td {
+  padding: 16px 22px;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 500;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sortable-table th:last-child,
+.sortable-table td:last-child {
+  border-right: none;
+}
+
+.no-data {
+  text-align: center;
+  padding: 70px 20px !important;
+}
+
+.no-data-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--glass-text-muted);
+}
+
+.no-data-icon {
+  font-size: 42px;
+  opacity: 0.6;
+}
+
+.no-data-message p {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .sortable-table {
+    font-size: 12px;
+  }
+
+  .sortable-table th,
+  .sortable-table td {
+    padding: 12px 14px;
+  }
+
+  .th-content {
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+  }
+}
