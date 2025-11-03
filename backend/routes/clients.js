@@ -4,6 +4,63 @@ const db = require('../config/database');
 
 router.get('/', async (req, res) => {
   try {
+    const page = Number.parseInt(req.query.page, 10);
+    const pageSize = Number.parseInt(req.query.pageSize, 10);
+    const search = (req.query.search || '').trim();
+
+    if (Number.isInteger(page) && page > 0) {
+      const normalizedSize = Math.min(Math.max(pageSize || 50, 1), 200);
+      const offset = (page - 1) * normalizedSize;
+
+      const conditions = [];
+      const params = [];
+
+      if (search) {
+        const term = `%${search.toLowerCase()}%`;
+        conditions.push(
+          `(LOWER(c.company_name) LIKE ? OR LOWER(c.contact_person) LIKE ? OR LOWER(c.email) LIKE ? OR LOWER(c.address) LIKE ? OR c.phone LIKE ? OR c.inn LIKE ?)`
+        );
+        params.push(term, term, term, term, `%${search}%`, `%${search}%`);
+      }
+
+      const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+      const [[{ total }]] = await db.query(
+        `SELECT COUNT(*) AS total FROM clients c ${whereClause}`,
+        params
+      );
+
+      const [rows] = await db.query(
+        `
+          SELECT 
+            c.id,
+            c.company_name,
+            c.contact_person,
+            c.email,
+            c.phone,
+            c.address,
+            c.inn,
+            c.status,
+            c.created_at,
+            c.updated_at
+          FROM clients c
+          ${whereClause}
+          ORDER BY c.created_at DESC
+          LIMIT ?
+          OFFSET ?
+        `,
+        [...params, normalizedSize, offset]
+      );
+
+      return res.json({
+        items: rows,
+        total,
+        page,
+        pageSize: normalizedSize,
+        hasMore: offset + rows.length < total
+      });
+    }
+
     const [rows] = await db.query('SELECT * FROM clients ORDER BY created_at DESC');
     res.json(rows);
   } catch (error) {

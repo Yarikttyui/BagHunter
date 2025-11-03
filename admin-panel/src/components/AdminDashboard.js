@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import ColorBends from './ColorBends';
 import NotificationBell from './NotificationBell';
@@ -25,6 +25,14 @@ function AdminDashboard({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [selectedInvoiceDetails, setSelectedInvoiceDetails] = useState(null);
   const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
+
+  const [clientsTotal, setClientsTotal] = useState(0);
+  const [invoicesTotal, setInvoicesTotal] = useState(0);
+  const [transactionsTotal, setTransactionsTotal] = useState(0);
+
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
 
   const [draggedTab, setDraggedTab] = useState(null);
   const [tabOrder, setTabOrder] = useState(() => {
@@ -54,18 +62,11 @@ function AdminDashboard({ user, onLogout }) {
   const canDeleteTransactions = isAdmin;
   const canApproveInvoices = isAdmin || isAccountant;
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
-
-  const fetchData = async () => {
+  const fetchInitialData = useCallback(async () => {
     setLoading(true);
     try {
       const requests = [
         axios.get(`${API_URL}/reports/stats`),
-        axios.get(`${API_URL}/clients`),
-        axios.get(`${API_URL}/invoices`),
-        axios.get(`${API_URL}/transactions`),
         axios.get(`${API_URL}/profiles/${user.id}`)
       ];
       
@@ -76,25 +77,210 @@ function AdminDashboard({ user, onLogout }) {
       
       const responses = await Promise.all(requests);
 
-      setStats(responses[0].data);
-      setClients(responses[1].data);
-      setInvoices(responses[2].data);
-      setTransactions(responses[3].data);
-      setUserProfile(responses[4].data);
+      setStats(responses[0]?.data ?? null);
+      setUserProfile(responses[1]?.data ?? null);
       
-      if (isAdmin && responses[5]) {
-        setUsers(responses[5].data);
-      }
-      
-      if (isAdmin && responses[6]) {
-        setInvoiceLogs(responses[6].data);
+      if (isAdmin) {
+        setUsers(responses[2]?.data ?? []);
+        setInvoiceLogs(responses[3]?.data ?? []);
       }
     } catch (error) {
       console.error('Ошибка загрузки данных:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_URL, isAdmin, user.id]);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
+
+  const normalizePaginated = useCallback((data) => {
+    if (Array.isArray(data)) {
+      return {
+        items: data,
+        total: data.length,
+        page: 1,
+        pageSize: data.length || itemsPerPage,
+        hasMore: false
+      };
+    }
+
+    const items = Array.isArray(data?.items) ? data.items : [];
+    return {
+      items,
+      total: typeof data?.total === 'number' ? data.total : items.length,
+      page: data?.page || 1,
+      pageSize: data?.pageSize || itemsPerPage,
+      hasMore: Boolean(data?.hasMore)
+    };
+  }, [itemsPerPage]);
+
+  const loadClients = useCallback(async () => {
+    try {
+      setClientsLoading(true);
+      const params = {
+        page: currentPageClients,
+        pageSize: itemsPerPage
+      };
+      if (searchTermClients.trim()) {
+        params.search = searchTermClients.trim();
+      }
+
+      const { data } = await axios.get(`${API_URL}/clients`, { params });
+      const payload = normalizePaginated(data);
+
+      const maxPage = Math.max(1, Math.ceil((payload.total || 0) / (payload.pageSize || itemsPerPage || 1)));
+      if (payload.total > 0 && payload.items.length === 0 && currentPageClients > maxPage) {
+        setCurrentPageClients(maxPage);
+        return;
+      }
+
+      setClients(payload.items);
+      setClientsTotal(payload.total);
+    } catch (error) {
+      console.error('Ошибка загрузки клиентов:', error);
+    } finally {
+      setClientsLoading(false);
+    }
+  }, [API_URL, currentPageClients, itemsPerPage, normalizePaginated, searchTermClients]);
+
+  const loadInvoices = useCallback(async () => {
+    try {
+      setInvoicesLoading(true);
+      const params = {
+        page: currentPageInvoices,
+        pageSize: itemsPerPage
+      };
+
+      if (searchTermInvoices.trim()) {
+        params.search = searchTermInvoices.trim();
+      }
+
+      if (filtersInvoices.status) {
+        params.status = filtersInvoices.status;
+      }
+
+      if (filtersInvoices.dateFrom) {
+        params.dateFrom = filtersInvoices.dateFrom;
+      }
+
+      if (filtersInvoices.dateTo) {
+        params.dateTo = filtersInvoices.dateTo;
+      }
+
+      if (filtersInvoices.minAmount) {
+        params.minAmount = filtersInvoices.minAmount;
+      }
+
+      if (filtersInvoices.maxAmount) {
+        params.maxAmount = filtersInvoices.maxAmount;
+      }
+
+      const { data } = await axios.get(`${API_URL}/invoices`, { params });
+      const payload = normalizePaginated(data);
+      const maxPage = Math.max(1, Math.ceil((payload.total || 0) / (payload.pageSize || itemsPerPage || 1)));
+
+      if (payload.total > 0 && payload.items.length === 0 && currentPageInvoices > maxPage) {
+        setCurrentPageInvoices(maxPage);
+        return;
+      }
+
+      setInvoices(payload.items);
+      setInvoicesTotal(payload.total);
+    } catch (error) {
+      console.error('Ошибка загрузки накладных:', error);
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }, [
+    API_URL,
+    currentPageInvoices,
+    itemsPerPage,
+    normalizePaginated,
+    searchTermInvoices,
+    filtersInvoices
+  ]);
+
+  const loadTransactions = useCallback(async () => {
+    try {
+      setTransactionsLoading(true);
+      const params = {
+        page: currentPageTransactions,
+        pageSize: itemsPerPage
+      };
+
+      if (searchTermTransactions.trim()) {
+        params.search = searchTermTransactions.trim();
+      }
+
+      if (filtersTransactions.transactionType) {
+        params.transactionType = filtersTransactions.transactionType;
+      }
+
+      if (filtersTransactions.dateFrom) {
+        params.dateFrom = filtersTransactions.dateFrom;
+      }
+
+      if (filtersTransactions.dateTo) {
+        params.dateTo = filtersTransactions.dateTo;
+      }
+
+      if (filtersTransactions.minAmount) {
+        params.minAmount = filtersTransactions.minAmount;
+      }
+
+      if (filtersTransactions.maxAmount) {
+        params.maxAmount = filtersTransactions.maxAmount;
+      }
+
+      const { data } = await axios.get(`${API_URL}/transactions`, { params });
+      const payload = normalizePaginated(data);
+
+      const maxPage = Math.max(
+        1,
+        Math.ceil((payload.total || 0) / (payload.pageSize || itemsPerPage || 1))
+      );
+
+      if (payload.total > 0 && payload.items.length === 0 && currentPageTransactions > maxPage) {
+        setCurrentPageTransactions(maxPage);
+        return;
+      }
+
+      setTransactions(payload.items);
+      setTransactionsTotal(payload.total);
+    } catch (error) {
+      console.error('Ошибка загрузки транзакций:', error);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }, [
+    API_URL,
+    currentPageTransactions,
+    itemsPerPage,
+    normalizePaginated,
+    searchTermTransactions,
+    filtersTransactions
+  ]);
+
+  const refreshAllData = useCallback(() => {
+    fetchInitialData();
+    loadClients();
+    loadInvoices();
+    loadTransactions();
+  }, [fetchInitialData, loadClients, loadInvoices, loadTransactions]);
+
+  useEffect(() => {
+    loadClients();
+  }, [loadClients]);
+
+  useEffect(() => {
+    loadInvoices();
+  }, [loadInvoices]);
+
+  useEffect(() => {
+    loadTransactions();
+  }, [loadTransactions]);
 
   const openModal = (type, data = {}) => {
     setModalType(type);
@@ -280,80 +466,12 @@ const downloadInvoicePdf = async (invoiceId) => {
   };
 
   
-  const filteredClients = useMemo(() => {
-    return clients.filter(client => {
-      const searchLower = searchTermClients.toLowerCase();
-      return (
-        client.company_name?.toLowerCase().includes(searchLower) ||
-        client.email?.toLowerCase().includes(searchLower) ||
-        client.phone?.includes(searchTermClients) ||
-        client.inn?.includes(searchTermClients) ||
-        client.address?.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [clients, searchTermClients]);
+  const filteredClients = useMemo(() => clients, [clients]);
 
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter(invoice => {
-      const searchLower = searchTermInvoices.toLowerCase();
-      const matchesSearch = 
-        invoice.invoice_number?.toLowerCase().includes(searchLower) ||
-        invoice.client_name?.toLowerCase().includes(searchLower);
+  const filteredInvoices = useMemo(() => invoices, [invoices]);
 
-      if (!matchesSearch) return false;
+  const filteredTransactions = useMemo(() => transactions, [transactions]);
 
-      if (filtersInvoices.status && invoice.status !== filtersInvoices.status) return false;
-      
-      if (filtersInvoices.dateFrom) {
-        const invoiceDate = new Date(invoice.invoice_date);
-        const filterDate = new Date(filtersInvoices.dateFrom);
-        if (invoiceDate < filterDate) return false;
-      }
-
-      if (filtersInvoices.dateTo) {
-        const invoiceDate = new Date(invoice.invoice_date);
-        const filterDate = new Date(filtersInvoices.dateTo);
-        if (invoiceDate > filterDate) return false;
-      }
-
-      if (filtersInvoices.minAmount && invoice.total_amount < Number(filtersInvoices.minAmount)) return false;
-      if (filtersInvoices.maxAmount && invoice.total_amount > Number(filtersInvoices.maxAmount)) return false;
-
-      return true;
-    });
-  }, [invoices, searchTermInvoices, filtersInvoices]);
-
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(transaction => {
-      const searchLower = searchTermTransactions.toLowerCase();
-      const matchesSearch = 
-        transaction.description?.toLowerCase().includes(searchLower) ||
-        transaction.payment_method?.toLowerCase().includes(searchLower);
-
-      if (!matchesSearch) return false;
-
-      if (filtersTransactions.transactionType && transaction.transaction_type !== filtersTransactions.transactionType) return false;
-      
-      if (filtersTransactions.dateFrom) {
-        const transDate = new Date(transaction.transaction_date);
-        const filterDate = new Date(filtersTransactions.dateFrom);
-        if (transDate < filterDate) return false;
-      }
-
-      if (filtersTransactions.dateTo) {
-        const transDate = new Date(transaction.transaction_date);
-        const filterDate = new Date(filtersTransactions.dateTo);
-        if (transDate > filterDate) return false;
-      }
-
-      if (filtersTransactions.minAmount && transaction.amount < Number(filtersTransactions.minAmount)) return false;
-      if (filtersTransactions.maxAmount && transaction.amount > Number(filtersTransactions.maxAmount)) return false;
-
-      return true;
-    });
-  }, [transactions, searchTermTransactions, filtersTransactions]);
-
-  
   const sortData = (data, column, direction) => {
     if (!column) return data;
 
@@ -382,13 +500,6 @@ const downloadInvoicePdf = async (invoiceId) => {
       if (aVal > bVal) return direction === 'asc' ? 1 : -1;
       return 0;
     });
-  };
-
-  
-  const paginateData = (data, currentPage, perPage) => {
-    const startIndex = (currentPage - 1) * perPage;
-    const endIndex = startIndex + perPage;
-    return data.slice(startIndex, endIndex);
   };
 
   const defaultTabs = [
@@ -446,10 +557,6 @@ const downloadInvoicePdf = async (invoiceId) => {
   const sortedClients = sortData(filteredClients, sortColumn, sortDirection);
   const sortedInvoices = sortData(filteredInvoices, sortColumn, sortDirection);
   const sortedTransactions = sortData(filteredTransactions, sortColumn, sortDirection);
-
-  const paginatedClients = paginateData(sortedClients, currentPageClients, itemsPerPage);
-  const paginatedInvoices = paginateData(sortedInvoices, currentPageInvoices, itemsPerPage);
-  const paginatedTransactions = paginateData(sortedTransactions, currentPageTransactions, itemsPerPage);
 
   const handleSort = (column, direction) => {
     setSortColumn(column);
@@ -662,7 +769,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                   )
                 }
               ]}
-              data={paginatedClients}
+              data={sortedClients}
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={handleSort}
@@ -787,7 +894,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                   )
                 }
               ]}
-              data={paginatedInvoices}
+              data={sortedInvoices}
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={handleSort}
@@ -884,7 +991,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                   )
                 }
               ]}
-              data={paginatedTransactions}
+              data={sortedTransactions}
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={handleSort}

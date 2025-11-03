@@ -4,6 +4,89 @@ const db = require('../config/database');
 
 router.get('/', async (req, res) => {
   try {
+    const page = Number.parseInt(req.query.page, 10);
+    const pageSize = Number.parseInt(req.query.pageSize, 10);
+    const transactionType = (req.query.transactionType || '').trim();
+    const dateFrom = req.query.dateFrom;
+    const dateTo = req.query.dateTo;
+    const minAmount = req.query.minAmount ? Number.parseFloat(req.query.minAmount) : undefined;
+    const maxAmount = req.query.maxAmount ? Number.parseFloat(req.query.maxAmount) : undefined;
+    const search = (req.query.search || '').trim();
+
+    if (Number.isInteger(page) && page > 0) {
+      const normalizedSize = Math.min(Math.max(pageSize || 50, 1), 200);
+      const offset = (page - 1) * normalizedSize;
+
+      const conditions = [];
+      const params = [];
+
+      if (transactionType) {
+        conditions.push('t.transaction_type = ?');
+        params.push(transactionType);
+      }
+
+      if (dateFrom) {
+        conditions.push('t.transaction_date >= ?');
+        params.push(dateFrom);
+      }
+
+      if (dateTo) {
+        conditions.push('t.transaction_date <= ?');
+        params.push(dateTo);
+      }
+
+      if (!Number.isNaN(minAmount)) {
+        conditions.push('t.amount >= ?');
+        params.push(minAmount);
+      }
+
+      if (!Number.isNaN(maxAmount)) {
+        conditions.push('t.amount <= ?');
+        params.push(maxAmount);
+      }
+
+      if (search) {
+        const term = `%${search.toLowerCase()}%`;
+        conditions.push('(LOWER(i.invoice_number) LIKE ? OR LOWER(t.description) LIKE ?)');
+        params.push(term, term);
+      }
+
+      const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+      const [[{ total }]] = await db.query(
+        `
+          SELECT COUNT(*) AS total
+          FROM transactions t
+          LEFT JOIN invoices i ON t.invoice_id = i.id
+          ${whereClause}
+        `,
+        params
+      );
+
+      const [rows] = await db.query(
+        `
+          SELECT 
+            t.*,
+            i.invoice_number
+          FROM transactions t
+          LEFT JOIN invoices i ON t.invoice_id = i.id
+          ${whereClause}
+          ORDER BY t.transaction_date DESC, t.id DESC
+          LIMIT ?
+          OFFSET ?
+        `,
+        [...params, normalizedSize, offset]
+      );
+
+      return res.json({
+        items: rows,
+        total,
+        page,
+        pageSize: normalizedSize,
+        hasMore: offset + rows.length < total
+      });
+    }
+
     const [rows] = await db.query(`
       SELECT t.*, i.invoice_number 
       FROM transactions t 

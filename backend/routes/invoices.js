@@ -50,28 +50,126 @@ async function fetchInvoiceWithClient(invoiceId) {
 router.get('/', async (req, res) => {
   try {
     const currentUser = req.user || {};
+    const page = Number.parseInt(req.query.page, 10);
+    const pageSize = Number.parseInt(req.query.pageSize, 10);
+    const search = (req.query.search || '').trim();
+    const status = (req.query.status || '').trim();
+    const clientIdFilter = req.query.clientId ? Number.parseInt(req.query.clientId, 10) : undefined;
+    const dateFrom = req.query.dateFrom;
+    const dateTo = req.query.dateTo;
+    const minAmount = req.query.minAmount ? Number.parseFloat(req.query.minAmount) : undefined;
+    const maxAmount = req.query.maxAmount ? Number.parseFloat(req.query.maxAmount) : undefined;
+
+    const applyUserFilter = async () => {
+      if (currentUser.role === 'client') {
+        if (!currentUser.client_id) {
+          return { conditions: ['1 = 0'], params: [] };
+        }
+        return { conditions: ['i.client_id = ?'], params: [currentUser.client_id] };
+      }
+
+      if (req.query.userRole === 'client' && req.query.userId) {
+        const [userRows] = await db.query('SELECT client_id FROM users WHERE id = ?', [req.query.userId]);
+        const clientId = userRows[0]?.client_id;
+        if (!clientId) {
+          return { conditions: ['1 = 0'], params: [] };
+        }
+        return { conditions: ['i.client_id = ?'], params: [clientId] };
+      }
+
+      return { conditions: [], params: [] };
+    };
+
+    const { conditions: baseConditions, params: baseParams } = await applyUserFilter();
+
+    if (Number.isInteger(page) && page > 0) {
+      const normalizedSize = Math.min(Math.max(pageSize || 50, 1), 200);
+      const offset = (page - 1) * normalizedSize;
+
+      const conditions = [...baseConditions];
+      const params = [...baseParams];
+
+      if (search) {
+        const term = `%${search.toLowerCase()}%`;
+        conditions.push('(LOWER(i.invoice_number) LIKE ? OR LOWER(c.company_name) LIKE ?)');
+        params.push(term, term);
+      }
+
+      if (status) {
+        conditions.push('i.status = ?');
+        params.push(status);
+      }
+
+      if (clientIdFilter) {
+        conditions.push('i.client_id = ?');
+        params.push(clientIdFilter);
+      }
+
+      if (dateFrom) {
+        conditions.push('i.invoice_date >= ?');
+        params.push(dateFrom);
+      }
+
+      if (dateTo) {
+        conditions.push('i.invoice_date <= ?');
+        params.push(dateTo);
+      }
+
+      if (!Number.isNaN(minAmount)) {
+        conditions.push('i.total_amount >= ?');
+        params.push(minAmount);
+      }
+
+      if (!Number.isNaN(maxAmount)) {
+        conditions.push('i.total_amount <= ?');
+        params.push(maxAmount);
+      }
+
+      const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+      const [[{ total }]] = await db.query(
+        `
+          SELECT COUNT(*) AS total
+          FROM invoices i
+          LEFT JOIN clients c ON i.client_id = c.id
+          ${whereClause}
+        `,
+        params
+      );
+
+      const [rows] = await db.query(
+        `
+          SELECT 
+            i.*,
+            c.company_name as client_name
+          FROM invoices i
+          LEFT JOIN clients c ON i.client_id = c.id
+          ${whereClause}
+          ORDER BY i.created_at DESC
+          LIMIT ?
+          OFFSET ?
+        `,
+        [...params, normalizedSize, offset]
+      );
+
+      return res.json({
+        items: rows,
+        total,
+        page,
+        pageSize: normalizedSize,
+        hasMore: offset + rows.length < total
+      });
+    }
+
     let query = `
       SELECT i.*, c.company_name as client_name
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
     `;
-    const params = [];
+    const params = [...baseParams];
 
-    if (currentUser.role === 'client') {
-      if (!currentUser.client_id) {
-        return res.json([]);
-      }
-      query += ' WHERE i.client_id = ?';
-      params.push(currentUser.client_id);
-    } else if (req.query.userRole === 'client' && req.query.userId) {
-      const [userRows] = await db.query('SELECT client_id FROM users WHERE id = ?', [req.query.userId]);
-      const clientId = userRows[0]?.client_id;
-      if (clientId) {
-        query += ' WHERE i.client_id = ?';
-        params.push(clientId);
-      } else {
-        return res.json([]);
-      }
+    if (baseConditions.length) {
+      query += ` WHERE ${baseConditions.join(' AND ')}`;
     }
 
     query += ' ORDER BY i.created_at DESC';
