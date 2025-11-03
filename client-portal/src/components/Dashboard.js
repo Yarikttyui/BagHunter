@@ -269,8 +269,8 @@ function Dashboard({ user, onLogout }) {
             )}
 
             <h3 style={{marginTop: '30px', marginBottom: '15px'}}>Товары</h3>
-            <div className="card table-card">
-              <table className="glass-table">
+            <div className="table-wrapper">
+              <table className="glass-table glass-table--compact">
                 <thead>
                   <tr>
                     <th>Наименование</th>
@@ -363,8 +363,8 @@ function Dashboard({ user, onLogout }) {
           </button>
         </div>
         
-        <div className="card table-card">
-          <table className="glass-table">
+        <div className="table-wrapper">
+          <table className="glass-table glass-table--compact">
             <thead>
               <tr>
                 <th>№ Накладной</th>

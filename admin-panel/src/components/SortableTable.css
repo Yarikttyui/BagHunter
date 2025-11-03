@@ -1,18 +1,33 @@
 .sortable-table-container {
   overflow-x: auto;
   border-radius: 22px;
-  background: linear-gradient(150deg, rgba(13, 20, 44, 0.75) 0%, rgba(28, 39, 78, 0.70) 100%);
-  border: 1px solid rgba(102, 126, 234, 0.25);
-  box-shadow: 0 18px 38px rgba(6, 11, 30, 0.45);
-  backdrop-filter: blur(26px);
-  -webkit-backdrop-filter: blur(26px);
+  background: var(--glass-surface-table);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-soft);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.8));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.8));
   position: relative;
-  padding: 4px;
+  padding: 6px;
+}
+
+.sortable-table-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 55%, transparent 70%);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sortable-table-container > * {
+  position: relative;
+  z-index: 1;
 }
 
 .sortable-table {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--glass-text-muted);
   background: transparent;
 }
 
@@ -23,13 +38,15 @@
   font-size: 12px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: #ffffff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--glass-text-strong);
+  border-bottom: 1px solid var(--glass-border);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   position: sticky;
   top: 0;
   z-index: 5;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+  background: var(--glass-header);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.6));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.6));
 }
 
 .sortable-table th.sortable {
@@ -40,8 +57,8 @@
 }
 
 .sortable-table th.sortable:hover {
-  color: #fffbfb;
-  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .th-content {
@@ -65,22 +82,22 @@
 
 .sortable-table tbody tr {
   transition: background 0.25s ease, transform 0.25s ease;
-  background: rgba(18, 25, 54, 0.4);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--glass-row);
+  border-bottom: 1px solid var(--glass-divider);
 }
 
 .sortable-table tbody tr:nth-child(even) {
-  background: rgba(24, 35, 68, 0.35);
+  background: var(--glass-row-alt);
 }
 
 .sortable-table tbody tr:hover {
   transform: translateX(4px);
-  background: rgba(102, 126, 234, 0.22);
+  background: var(--glass-hover);
 }
 
 .sortable-table td {
   padding: 16px 22px;
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--glass-text-muted);
   font-weight: 500;
   border-right: 1px solid rgba(255, 255, 255, 0.05);
 }

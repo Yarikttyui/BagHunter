@@ -3,13 +3,14 @@
   --accent-secondary: #764ba2;
   --accent-highlight: #43e97b;
   --glass-surface-soft: linear-gradient(140deg, rgba(255, 255, 255, 0.14) 0%, rgba(102, 126, 234, 0.08) 100%);
-  --glass-surface-strong: linear-gradient(140deg, rgba(18, 26, 58, 0.72) 0%, rgba(30, 44, 92, 0.68) 100%);
-  --glass-row: rgba(10, 16, 41, 0.58);
-  --glass-row-alt: rgba(15, 23, 49, 0.5);
-  --glass-border: rgba(255, 255, 255, 0.22);
-  --glass-divider: rgba(255, 255, 255, 0.12);
-  --glass-header: linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(102, 126, 234, 0.18) 100%);
-  --glass-hover: rgba(102, 126, 234, 0.28);
+  --glass-surface-strong: linear-gradient(150deg, rgba(18, 26, 58, 0.68) 0%, rgba(30, 44, 92, 0.6) 100%);
+  --glass-surface-table: linear-gradient(160deg, rgba(16, 24, 52, 0.55) 0%, rgba(29, 42, 82, 0.48) 60%, rgba(88, 116, 228, 0.32) 100%);
+  --glass-row: rgba(18, 29, 66, 0.42);
+  --glass-row-alt: rgba(15, 24, 57, 0.36);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-divider: rgba(255, 255, 255, 0.1);
+  --glass-header: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(102, 126, 234, 0.2) 100%);
+  --glass-hover: rgba(102, 126, 234, 0.34);
   --glass-text-strong: rgba(255, 255, 255, 0.95);
   --glass-text-muted: rgba(255, 255, 255, 0.78);
   --glass-shadow: 0 24px 48px rgba(6, 10, 28, 0.45);
@@ -78,14 +79,16 @@
 
 .glass-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   background: transparent;
+  color: var(--glass-text-muted);
 }
 
 .glass-table thead tr {
   background: var(--glass-header);
-  backdrop-filter: blur(calc(var(--glass-blur) / 1.5));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) / 1.5));
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.6));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.6));
 }
 
 .glass-table th {
@@ -106,6 +109,35 @@
   border-bottom: 1px solid var(--glass-divider);
 }
 
+.glass-table th:not(:last-child),
+.glass-table td:not(:last-child) {
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-table thead tr th:first-child {
+  border-top-left-radius: 18px;
+}
+
+.glass-table thead tr th:last-child {
+  border-top-right-radius: 18px;
+}
+
+.glass-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 18px;
+}
+
+.glass-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 18px;
+}
+
+.glass-table--compact th {
+  padding: 15px 18px;
+}
+
+.glass-table--compact td {
+  padding: 12px 18px;
+}
+
 .glass-table tbody tr {
   background: var(--glass-row);
   transition: transform 0.3s ease, background 0.3s ease;
@@ -117,7 +149,7 @@
 
 .glass-table tbody tr:hover {
   background: var(--glass-hover);
-  transform: translateX(6px);
+  transform: translateX(4px);
 }
 
 .glass-table tbody tr:last-child td {
@@ -853,14 +885,30 @@
 
 .table-wrapper {
   padding: 0;
-  background: var(--glass-surface-strong);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: var(--glass-surface-table);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.75));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.75));
   border-radius: 20px;
   border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
+  box-shadow: var(--glass-shadow-soft);
   margin-top: 10px;
   overflow: hidden;
+  position: relative;
+}
+
+.table-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 48%, transparent 65%);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.table-wrapper > * {
+  position: relative;
+  z-index: 1;
 }
 
 .table-wrapper__title {
