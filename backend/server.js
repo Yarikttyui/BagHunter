@@ -64,9 +64,7 @@ const settingsRoutes = require('./routes/settings');
 const analyticsRoutes = require('./routes/analytics');
 const commentsRoutes = require('./routes/comments');
 const profilesRoutes = require('./routes/profiles');
-const transportRoutes = require('./routes/transport');
 const trackingRoutes = require('./routes/tracking');
-const warehouseRoutes = require('./routes/warehouse');
 const searchRoutes = require('./routes/search');
 const productsRoutes = require('./routes/products');
 
@@ -82,17 +80,13 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/comments', commentsRoutes);
 app.use('/api/profiles', profilesRoutes);
-app.use('/api/transport', transportRoutes);
 app.use('/api/tracking', trackingRoutes);
-app.use('/api/warehouse', warehouseRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/comments', commentsRoutes);
 app.use('/api/profiles', profilesRoutes);
-app.use('/api/transport', transportRoutes);
 app.use('/api/tracking', trackingRoutes);
-app.use('/api/warehouse', warehouseRoutes);
 app.use('/api/search', searchRoutes);
 
 app.get('/', (req, res) => {
