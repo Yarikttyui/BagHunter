@@ -2,12 +2,11 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
-const STATUS_META = {
-  pending: { label: 'Ожидает обработки', color: '#facc15', textColor: '#854d0e', icon: '⏳' },
-  in_transit: { label: 'В пути', color: '#38bdf8', textColor: '#0c4a6e', icon: '🚚' },
-  delivered: { label: 'Доставлено', color: '#4ade80', textColor: '#14532d', icon: '✅' },
-  cancelled: { label: 'Отменено', color: '#f87171', textColor: '#7f1d1d', icon: '⛔' },
-  default: { label: 'Статус не указан', color: '#9ca3af', textColor: '#1f2937', icon: 'ℹ️' }
+const STATUS_TEXT = {
+  pending: 'Ожидает обработки',
+  in_transit: 'В пути',
+  delivered: 'Доставлено',
+  cancelled: 'Отменено'
 };
 
 const PALETTE = {
@@ -73,7 +72,6 @@ async function generateInvoicePDF(invoiceData, items = [], res) {
       invoice: invoiceData,
       fonts: { regular: regularFontName, bold: boldFontName },
       palette: PALETTE,
-      statusMeta: getStatusMeta(invoiceData.status),
       logoPath: logoExists ? logoPath : null
     });
 
@@ -106,7 +104,7 @@ async function generateInvoicePDF(invoiceData, items = [], res) {
           label: 'Плановая доставка',
           value: invoiceData.delivery_date ? formatDate(invoiceData.delivery_date) : 'Не указана'
         },
-        { label: 'Статус', value: getStatusMeta(invoiceData.status).label },
+        { label: 'Статус', value: STATUS_TEXT[invoiceData.status] || STATUS_TEXT.pending },
         { label: 'Позиций', value: `${Math.max(items.length, 1)}` },
         { label: 'Сумма', value: formatCurrency(invoiceData.total_amount) }
       ],
@@ -181,7 +179,7 @@ async function generateInvoicePDF(invoiceData, items = [], res) {
   }
 }
 
-function drawHeader(doc, { x, y, width, invoice, fonts, palette, statusMeta, logoPath }) {
+function drawHeader(doc, { x, y, width, invoice, fonts, palette, logoPath }) {
   doc.save();
   doc.roundedRect(x, y, width, 110, 8).fill('#ffffff');
   doc.strokeColor(palette.border).lineWidth(1).roundedRect(x, y, width, 110, 8).stroke();
@@ -198,27 +196,10 @@ function drawHeader(doc, { x, y, width, invoice, fonts, palette, statusMeta, log
   doc.text(`№ ${invoice.invoice_number}`, x + 22, y + 58);
   doc.text(`от ${formatDate(invoice.invoice_date)}`, x + 22, y + 74);
 
-  drawStatusBadge(doc, {
-    x: x + width - 210,
-    y: y + 70,
-    width: 192,
-    height: 30,
-    statusMeta,
-    fonts,
-    palette
-  });
-}
-
-function drawStatusBadge(doc, { x, y, width, height, statusMeta, fonts }) {
-  doc.save();
-  doc.fillColor(statusMeta.color);
-  doc.roundedRect(x, y, width, height, height / 2).fill();
-  doc.restore();
-
   doc.font(fonts.bold)
     .fontSize(11)
-    .fillColor(statusMeta.textColor)
-    .text(`${statusMeta.icon} ${statusMeta.label}`, x, y + height / 2 - 6, { width, align: 'center' });
+    .fillColor(palette.textPrimary)
+    .text(`Статус: ${STATUS_TEXT[invoice.status] || STATUS_TEXT.pending}`, x + 22, y + 92);
 }
 
 function drawInfoCard(doc, { x, y, width, title, rows, fonts, palette }) {
@@ -248,61 +229,71 @@ function drawInfoCard(doc, { x, y, width, title, rows, fonts, palette }) {
 }
 
 function drawItemsTable(doc, { x, y, width, items, fonts, palette, margin }) {
+  const numberWidth = 40;
+  const quantityWidth = 80;
+  const priceWidth = 110;
+  const amountWidth = 120;
+  const nameWidth = Math.max(width - (numberWidth + quantityWidth + priceWidth + amountWidth), 160);
+
   const columns = [
-    { header: '№', width: 40, align: 'center', accessor: (_, idx) => `${idx + 1}` },
+    { header: '№', width: numberWidth, align: 'center', accessor: (_, idx) => `${idx + 1}` },
     {
       header: 'Наименование',
-      width: width - 310,
+      width: nameWidth,
       align: 'left',
       accessor: (item) => item.product_name || '—'
     },
     {
       header: 'Кол-во',
-      width: 90,
+      width: quantityWidth,
       align: 'right',
       accessor: (item) => formatNumber(item.quantity)
     },
     {
       header: 'Цена',
-      width: 100,
+      width: priceWidth,
       align: 'right',
       accessor: (item) => formatCurrency(item.unit_price)
     },
     {
       header: 'Сумма',
-      width: 120,
+      width: amountWidth,
       align: 'right',
       accessor: (item) =>
         formatCurrency(item.total_price ?? Number(item.quantity || 0) * Number(item.unit_price || 0))
     }
   ];
 
-  const headerHeight = 30;
-  const rowHeight = 26;
+  const headerHeight = 28;
+  const rowHeight = 24;
 
-  doc.save();
-  doc.roundedRect(x, y, width, headerHeight, 6).fill(PALETTE.headerFill);
-  doc.strokeColor(palette.border).lineWidth(1).roundedRect(x, y, width, headerHeight, 6).stroke();
-  doc.restore();
+  const drawHeader = (headerY) => {
+    doc.save();
+    doc.fillColor(palette.headerFill);
+    doc.rect(x, headerY, width, headerHeight).fill();
+    doc.strokeColor(palette.border).lineWidth(1).rect(x, headerY, width, headerHeight).stroke();
+    doc.restore();
 
-  let cursorX = x;
-  columns.forEach((col) => {
-    doc.font(fonts.bold).fontSize(10).fillColor(palette.textPrimary);
-    doc.text(col.header, cursorX + 10, y + 8, { width: col.width - 20, align: col.align });
-    cursorX += col.width;
-  });
+    let cursorX = x;
+    columns.forEach((col) => {
+      doc.font(fonts.bold).fontSize(10).fillColor(palette.textPrimary);
+      doc.text(col.header, cursorX + 8, headerY + 7, { width: col.width - 16, align: col.align });
+      cursorX += col.width;
+    });
+  };
+
+  drawHeader(y);
 
   let cursorY = y + headerHeight;
   const data = Array.isArray(items) && items.length ? items : [];
 
   if (!data.length) {
     doc.save();
-    doc.roundedRect(x, cursorY, width, rowHeight, 6).fill('#ffffff');
-    doc.strokeColor(palette.border).lineWidth(1).roundedRect(x, cursorY, width, rowHeight, 6).stroke();
+    doc.rect(x, cursorY, width, rowHeight).strokeColor(palette.border).lineWidth(1).stroke();
     doc.restore();
 
     doc.font(fonts.regular).fontSize(10).fillColor(palette.textMuted);
-    doc.text('В накладной нет позиций', x + 12, cursorY + 7, { width: width - 24 });
+    doc.text('В накладной нет позиций', x + 8, cursorY + 6, { width: width - 16 });
     return cursorY + rowHeight;
   }
 
@@ -312,39 +303,23 @@ function drawItemsTable(doc, { x, y, width, items, fonts, palette, margin }) {
       doc.rect(0, 0, doc.page.width, doc.page.height).fill(PALETTE.background);
       doc.font(fonts.regular).fillColor(palette.textPrimary);
       cursorY = margin;
-
-      doc.save();
-      doc.roundedRect(x, cursorY, width, headerHeight, 6).fill(PALETTE.headerFill);
-      doc.strokeColor(palette.border).lineWidth(1).roundedRect(x, cursorY, width, headerHeight, 6).stroke();
-      doc.restore();
-
-      cursorX = x;
-      columns.forEach((col) => {
-        doc.font(fonts.bold).fontSize(10).fillColor(palette.textPrimary);
-        doc.text(col.header, cursorX + 10, cursorY + 8, { width: col.width - 20, align: col.align });
-        cursorX += col.width;
-      });
-
+      drawHeader(cursorY);
       cursorY += headerHeight;
     }
 
     const isEven = index % 2 === 0;
     doc.save();
-    doc.fillColor(isEven ? '#ffffff' : PALETTE.tableStripe);
+    doc.fillColor(isEven ? '#ffffff' : '#fbfbfb');
     doc.rect(x, cursorY, width, rowHeight).fill();
-    doc.restore();
-
-    doc.save();
-    doc.strokeColor(palette.border);
-    doc.rect(x, cursorY, width, rowHeight).stroke();
+    doc.strokeColor(palette.border).lineWidth(1).rect(x, cursorY, width, rowHeight).stroke();
     doc.restore();
 
     let cellX = x;
     columns.forEach((col) => {
       const value = col.accessor(item, index);
       doc.font(fonts.regular).fontSize(10).fillColor(palette.textPrimary);
-      doc.text(value, cellX + 10, cursorY + 7, {
-        width: col.width - 20,
+      doc.text(value, cellX + 8, cursorY + 6, {
+        width: col.width - 16,
         align: col.align,
         lineBreak: false
       });
@@ -443,11 +418,12 @@ function addNotesPage(doc, { margin, width, fonts, palette }) {
   doc.text('Заполните вручную при необходимости.', margin, margin + 28);
 
   const startY = margin + 50;
-  const lineGap = 28;
-  const lines = 12;
+  const lineGap = 24;
+  const availableHeight = doc.page.height - margin - startY;
+  const lines = Math.max(1, Math.floor(availableHeight / lineGap));
 
   doc.save();
-  doc.strokeColor(palette.border).lineWidth(0.7);
+  doc.strokeColor(palette.border).lineWidth(0.6);
   for (let i = 0; i < lines; i += 1) {
     const lineY = startY + i * lineGap;
     doc.moveTo(margin, lineY).lineTo(margin + width, lineY).stroke();
@@ -491,10 +467,6 @@ function formatNumber(value) {
   })
     .format(numeric)
     .replace(/\u00a0/g, ' ');
-}
-
-function getStatusMeta(status) {
-  return STATUS_META[status] || STATUS_META.default;
 }
 
 module.exports = {

@@ -34,6 +34,27 @@ function AdminDashboard({ user, onLogout }) {
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
 
+  const handleApiError = useCallback(
+    (error, contextMessage) => {
+      const status = error?.response?.status;
+      if (status === 401) {
+        console.error('Auth middleware error:', error?.response?.data || error.message);
+        if (typeof onLogout === 'function') {
+          onLogout();
+        }
+        return true;
+      }
+
+      if (contextMessage) {
+        console.error(contextMessage, error);
+      } else {
+        console.error(error);
+      }
+      return false;
+    },
+    [onLogout]
+  );
+
   const [draggedTab, setDraggedTab] = useState(null);
   const [tabOrder, setTabOrder] = useState(() => {
     const saved = localStorage.getItem(`tabOrder_${user.id}`);
@@ -85,6 +106,9 @@ function AdminDashboard({ user, onLogout }) {
         setInvoiceLogs(responses[3]?.data ?? []);
       }
     } catch (error) {
+      if (handleApiError(error, 'Ошибка загрузки данных')) {
+        return;
+      }
       console.error('Ошибка загрузки данных:', error);
     } finally {
       setLoading(false);
@@ -139,7 +163,9 @@ function AdminDashboard({ user, onLogout }) {
       setClients(payload.items);
       setClientsTotal(payload.total);
     } catch (error) {
-      console.error('Ошибка загрузки клиентов:', error);
+      if (handleApiError(error, 'Ошибка загрузки клиентов')) {
+        return;
+      }
     } finally {
       setClientsLoading(false);
     }
@@ -189,7 +215,9 @@ function AdminDashboard({ user, onLogout }) {
       setInvoices(payload.items);
       setInvoicesTotal(payload.total);
     } catch (error) {
-      console.error('Ошибка загрузки накладных:', error);
+      if (handleApiError(error, 'Ошибка загрузки накладных')) {
+        return;
+      }
     } finally {
       setInvoicesLoading(false);
     }
@@ -250,7 +278,9 @@ function AdminDashboard({ user, onLogout }) {
       setTransactions(payload.items);
       setTransactionsTotal(payload.total);
     } catch (error) {
-      console.error('Ошибка загрузки транзакций:', error);
+      if (handleApiError(error, 'Ошибка загрузки транзакций')) {
+        return;
+      }
     } finally {
       setTransactionsLoading(false);
     }
@@ -323,7 +353,7 @@ function AdminDashboard({ user, onLogout }) {
       }
       
       closeModal();
-      fetchData();
+      refreshAllData();
     } catch (error) {
       console.error('Ошибка сохранения:', error);
       alert('Ошибка при сохранении данных');
@@ -335,7 +365,7 @@ function AdminDashboard({ user, onLogout }) {
     
     try {
       await axios.delete(`${API_URL}/${type}/${id}`);
-      fetchData();
+      refreshAllData();
     } catch (error) {
       console.error('Ошибка удаления:', error);
     }
@@ -346,7 +376,7 @@ function AdminDashboard({ user, onLogout }) {
     
     try {
       await axios.delete(`${API_URL}/users/${userId}`);
-      fetchData();
+      refreshAllData();
     } catch (error) {
       console.error('Ошибка удаления пользователя:', error);
       alert('Ошибка при удалении пользователя');
@@ -409,7 +439,7 @@ const downloadInvoicePdf = async (invoiceId) => {
         user_id: user.id
       });
       
-      fetchData();
+      refreshAllData();
       alert(`Накладная ${newStatus === 'in_transit' ? 'одобрена и отправлена' : newStatus === 'delivered' ? 'помечена как доставленная' : 'отклонена'}`);
     } catch (error) {
       console.error('Ошибка обновления статуса:', error);
@@ -689,32 +719,38 @@ const downloadInvoicePdf = async (invoiceId) => {
 
             <h2 className="section-title" style={{marginTop: '40px'}}>Последние накладные</h2>
             <div className="table-wrapper table-wrapper--dashboard">
-              <table className="glass-table glass-table--compact">
-                <thead>
-                  <tr>
-                    <th>№</th>
-                    <th>Клиент</th>
-                    <th>Дата</th>
-                    <th>Сумма</th>
-                    <th>Статус</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.slice(0, 5).map(invoice => (
-                    <tr key={invoice.id}>
-                      <td>{invoice.invoice_number}</td>
-                      <td>{invoice.client_name}</td>
-                      <td>{formatDate(invoice.invoice_date)}</td>
-                      <td>{formatCurrency(invoice.total_amount)}</td>
-                      <td>
-                        <span className={`status-badge status-${invoice.status}`}>
-                          {getStatusText(invoice.status)}
-                        </span>
-                      </td>
+              {invoicesLoading ? (
+                <div className="table-empty">Загрузка...</div>
+              ) : sortedInvoices.length === 0 ? (
+                <div className="table-empty">Данные отсутствуют</div>
+              ) : (
+                <table className="glass-table glass-table--compact">
+                  <thead>
+                    <tr>
+                      <th>№</th>
+                      <th>Клиент</th>
+                      <th>Дата</th>
+                      <th>Сумма</th>
+                      <th>Статус</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {sortedInvoices.slice(0, 5).map((invoice) => (
+                      <tr key={invoice.id}>
+                        <td>{invoice.invoice_number}</td>
+                        <td>{invoice.client_name}</td>
+                        <td>{formatDate(invoice.invoice_date)}</td>
+                        <td>{formatCurrency(invoice.total_amount)}</td>
+                        <td>
+                          <span className={`status-badge status-${invoice.status}`}>
+                            {getStatusText(invoice.status)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
@@ -1310,7 +1346,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                           await axios.post(`${API_URL}/profiles/${user.id}/avatar`, formData, {
                             headers: { 'Content-Type': 'multipart/form-data' }
                           });
-                          fetchData();
+                          fetchInitialData();
                         } catch (error) {
                           alert('Ошибка загрузки аватара');
                         }

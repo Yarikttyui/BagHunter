@@ -9,8 +9,16 @@ router.get('/', async (req, res) => {
     const transactionType = (req.query.transactionType || '').trim();
     const dateFrom = req.query.dateFrom;
     const dateTo = req.query.dateTo;
-    const minAmount = req.query.minAmount ? Number.parseFloat(req.query.minAmount) : undefined;
-    const maxAmount = req.query.maxAmount ? Number.parseFloat(req.query.maxAmount) : undefined;
+    const rawMinAmount = req.query.minAmount;
+    const rawMaxAmount = req.query.maxAmount;
+    const minAmount =
+      rawMinAmount !== undefined && rawMinAmount !== ''
+        ? Number.parseFloat(rawMinAmount)
+        : undefined;
+    const maxAmount =
+      rawMaxAmount !== undefined && rawMaxAmount !== ''
+        ? Number.parseFloat(rawMaxAmount)
+        : undefined;
     const search = (req.query.search || '').trim();
 
     if (Number.isInteger(page) && page > 0) {
@@ -35,12 +43,12 @@ router.get('/', async (req, res) => {
         params.push(dateTo);
       }
 
-      if (!Number.isNaN(minAmount)) {
+      if (minAmount !== undefined && !Number.isNaN(minAmount)) {
         conditions.push('t.amount >= ?');
         params.push(minAmount);
       }
 
-      if (!Number.isNaN(maxAmount)) {
+      if (maxAmount !== undefined && !Number.isNaN(maxAmount)) {
         conditions.push('t.amount <= ?');
         params.push(maxAmount);
       }

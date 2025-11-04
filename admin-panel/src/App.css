@@ -911,6 +911,13 @@
   z-index: 1;
 }
 
+.table-empty {
+  padding: 28px;
+  text-align: center;
+  color: var(--glass-text-muted);
+  font-size: 14px;
+}
+
 .table-wrapper__title {
   color: #ffffff;
   font-size: 18px;

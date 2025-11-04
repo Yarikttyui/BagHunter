@@ -57,8 +57,16 @@ router.get('/', async (req, res) => {
     const clientIdFilter = req.query.clientId ? Number.parseInt(req.query.clientId, 10) : undefined;
     const dateFrom = req.query.dateFrom;
     const dateTo = req.query.dateTo;
-    const minAmount = req.query.minAmount ? Number.parseFloat(req.query.minAmount) : undefined;
-    const maxAmount = req.query.maxAmount ? Number.parseFloat(req.query.maxAmount) : undefined;
+    const rawMinAmount = req.query.minAmount;
+    const rawMaxAmount = req.query.maxAmount;
+    const minAmount =
+      rawMinAmount !== undefined && rawMinAmount !== ''
+        ? Number.parseFloat(rawMinAmount)
+        : undefined;
+    const maxAmount =
+      rawMaxAmount !== undefined && rawMaxAmount !== ''
+        ? Number.parseFloat(rawMaxAmount)
+        : undefined;
 
     const applyUserFilter = async () => {
       if (currentUser.role === 'client') {
@@ -115,12 +123,12 @@ router.get('/', async (req, res) => {
         params.push(dateTo);
       }
 
-      if (!Number.isNaN(minAmount)) {
+      if (minAmount !== undefined && !Number.isNaN(minAmount)) {
         conditions.push('i.total_amount >= ?');
         params.push(minAmount);
       }
 
-      if (!Number.isNaN(maxAmount)) {
+      if (maxAmount !== undefined && !Number.isNaN(maxAmount)) {
         conditions.push('i.total_amount <= ?');
         params.push(maxAmount);
       }
