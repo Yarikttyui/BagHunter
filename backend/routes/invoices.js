@@ -5,6 +5,12 @@ const emailService = require('../services/emailService');
 const pdfService = require('../services/pdfService');
 const excelService = require('../services/excelService');
 const { requireRole } = require('../middleware/auth');
+const {
+  getPagination,
+  parseNumberRange,
+  applyDateRange,
+  applyNumberRange
+} = require('../utils/queryHelpers');
 
 const STATUS_TEXT = {
   pending: 'Ожидает подтверждения',
@@ -47,26 +53,15 @@ async function fetchInvoiceWithClient(invoiceId) {
   return rows;
 }
 
-router.get('/', async (req, res) => {
+router.get('/', requireRole('admin', 'accountant', 'client'), async (req, res) => {
   try {
     const currentUser = req.user || {};
-    const page = Number.parseInt(req.query.page, 10);
-    const pageSize = Number.parseInt(req.query.pageSize, 10);
     const search = (req.query.search || '').trim();
     const status = (req.query.status || '').trim();
     const clientIdFilter = req.query.clientId ? Number.parseInt(req.query.clientId, 10) : undefined;
     const dateFrom = req.query.dateFrom;
     const dateTo = req.query.dateTo;
-    const rawMinAmount = req.query.minAmount;
-    const rawMaxAmount = req.query.maxAmount;
-    const minAmount =
-      rawMinAmount !== undefined && rawMinAmount !== ''
-        ? Number.parseFloat(rawMinAmount)
-        : undefined;
-    const maxAmount =
-      rawMaxAmount !== undefined && rawMaxAmount !== ''
-        ? Number.parseFloat(rawMaxAmount)
-        : undefined;
+    const { min: minAmount, max: maxAmount } = parseNumberRange(req.query, 'minAmount', 'maxAmount');
 
     const applyUserFilter = async () => {
       if (currentUser.role === 'client') {
@@ -89,101 +84,64 @@ router.get('/', async (req, res) => {
     };
 
     const { conditions: baseConditions, params: baseParams } = await applyUserFilter();
+    const { page, pageSize, offset } = getPagination(req.query);
 
-    if (Number.isInteger(page) && page > 0) {
-      const normalizedSize = Math.min(Math.max(pageSize || 50, 1), 200);
-      const offset = (page - 1) * normalizedSize;
-
-      const conditions = [...baseConditions];
-      const params = [...baseParams];
-
-      if (search) {
-        const term = `%${search.toLowerCase()}%`;
-        conditions.push('(LOWER(i.invoice_number) LIKE ? OR LOWER(c.company_name) LIKE ?)');
-        params.push(term, term);
-      }
-
-      if (status) {
-        conditions.push('i.status = ?');
-        params.push(status);
-      }
-
-      if (clientIdFilter) {
-        conditions.push('i.client_id = ?');
-        params.push(clientIdFilter);
-      }
-
-      if (dateFrom) {
-        conditions.push('i.invoice_date >= ?');
-        params.push(dateFrom);
-      }
-
-      if (dateTo) {
-        conditions.push('i.invoice_date <= ?');
-        params.push(dateTo);
-      }
-
-      if (minAmount !== undefined && !Number.isNaN(minAmount)) {
-        conditions.push('i.total_amount >= ?');
-        params.push(minAmount);
-      }
-
-      if (maxAmount !== undefined && !Number.isNaN(maxAmount)) {
-        conditions.push('i.total_amount <= ?');
-        params.push(maxAmount);
-      }
-
-      const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-
-      const [[{ total }]] = await db.query(
-        `
-          SELECT COUNT(*) AS total
-          FROM invoices i
-          LEFT JOIN clients c ON i.client_id = c.id
-          ${whereClause}
-        `,
-        params
-      );
-
-      const [rows] = await db.query(
-        `
-          SELECT 
-            i.*,
-            c.company_name as client_name
-          FROM invoices i
-          LEFT JOIN clients c ON i.client_id = c.id
-          ${whereClause}
-          ORDER BY i.created_at DESC
-          LIMIT ?
-          OFFSET ?
-        `,
-        [...params, normalizedSize, offset]
-      );
-
-      return res.json({
-        items: rows,
-        total,
-        page,
-        pageSize: normalizedSize,
-        hasMore: offset + rows.length < total
-      });
-    }
-
-    let query = `
-      SELECT i.*, c.company_name as client_name
-      FROM invoices i
-      LEFT JOIN clients c ON i.client_id = c.id
-    `;
+    const conditions = [...baseConditions];
     const params = [...baseParams];
 
-    if (baseConditions.length) {
-      query += ` WHERE ${baseConditions.join(' AND ')}`;
+    if (search) {
+      const term = `%${search.toLowerCase()}%`;
+      conditions.push('(LOWER(i.invoice_number) LIKE ? OR LOWER(c.company_name) LIKE ?)');
+      params.push(term, term);
     }
 
-    query += ' ORDER BY i.created_at DESC';
+    if (status) {
+      conditions.push('i.status = ?');
+      params.push(status);
+    }
 
-    const [rows] = await db.query(query, params);
-    res.json(rows);
+    if (clientIdFilter) {
+      conditions.push('i.client_id = ?');
+      params.push(clientIdFilter);
+    }
+
+    applyDateRange(conditions, params, 'i.invoice_date', dateFrom, dateTo);
+    applyNumberRange(conditions, params, 'i.total_amount', minAmount, maxAmount);
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const [[{ total }]] = await db.query(
+      `
+        SELECT COUNT(*) AS total
+        FROM invoices i
+        LEFT JOIN clients c ON i.client_id = c.id
+        ${whereClause}
+      `,
+      params
+    );
+
+    const [rows] = await db.query(
+      `
+        SELECT 
+          i.*,
+          c.company_name as client_name
+        FROM invoices i
+        LEFT JOIN clients c ON i.client_id = c.id
+        ${whereClause}
+        ORDER BY i.created_at DESC
+        LIMIT ?
+        OFFSET ?
+      `,
+      [...params, pageSize, offset]
+    );
+
+    res.json({
+      items: rows,
+      total,
+      page,
+      pageSize,
+      hasMore: offset + rows.length < total
+    });
   } catch (error) {
     console.error('Не удалось получить список накладных:', error);
     res.status(500).json({ error: error.message });
@@ -230,7 +188,7 @@ router.get('/logs/all', requireRole('admin'), async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireRole('admin', 'accountant', 'client'), async (req, res) => {
   try {
     const currentUser = req.user || {};
     const invoiceRows = await fetchInvoiceWithClient(req.params.id);
@@ -257,7 +215,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.get('/:id/pdf', async (req, res) => {
+router.get('/:id/pdf', requireRole('admin', 'accountant', 'client'), async (req, res) => {
   try {
     const currentUser = req.user || {};
     const invoiceRows = await fetchInvoiceWithClient(req.params.id);

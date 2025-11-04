@@ -8,6 +8,16 @@ import { API_BASE_URL } from '../config/api';
 
 const API_URL = API_BASE_URL;
 
+const normalizeListResponse = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && Array.isArray(payload.items)) {
+    return payload.items;
+  }
+  return [];
+};
+
 function Dashboard({ user, onLogout }) {
   const [invoices, setInvoices] = useState([]);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -36,7 +46,7 @@ function Dashboard({ user, onLogout }) {
         axios.get(`${API_URL}/products`)
       ]);
 
-      setInvoices(invoicesRes.data);
+      setInvoices(normalizeListResponse(invoicesRes.data));
       setStats(statsRes.data);
       setProducts(productsRes.data);
     } catch (error) {
