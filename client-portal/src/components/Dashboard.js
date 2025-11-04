@@ -268,7 +268,7 @@ function Dashboard({ user, onLogout }) {
               </div>
             )}
 
-            <h3 style={{marginTop: '30px', marginBottom: '15px'}}>Товары</h3>
+            <h3 style={{marginTop: '30px', marginBottom: '15px', color: '#ffffff'}}>Товары</h3>
             <div className="card table-card">
               <table className="glass-table">
                 <thead>
@@ -292,7 +292,7 @@ function Dashboard({ user, onLogout }) {
               </table>
             </div>
 
-            <h3 style={{marginTop: '40px', marginBottom: '15px'}}>💬 Комментарии</h3>
+            <h3 style={{marginTop: '40px', marginBottom: '15px', color: '#ffffff'}}>Комментарии</h3>
             <Comments invoiceId={selectedInvoice.id} user={user} />
           </div>
         </div>

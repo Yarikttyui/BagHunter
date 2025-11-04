@@ -64,7 +64,7 @@ function Login({ onLogin, onSwitchToRegister }) {
       />
       <div className="login-box">
         <h1>Личный кабинет клиента</h1>
-        <p className="subtitle">BAGXanter Logistics</p>
+        <p className="subtitle">BagHunter Logistics</p>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
