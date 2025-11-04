@@ -275,6 +275,10 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
       items
     } = req.body;
 
+    const normalizedInvoiceDate = invoice_date || new Date().toISOString().split('T')[0];
+    const normalizedDeliveryDate = delivery_date ? delivery_date : null;
+    const normalizedNotes = notes || null;
+
     let targetClientId = client_id;
 
     if (currentUser.role === 'client') {
@@ -286,7 +290,7 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
     
     const [result] = await db.query(
       'INSERT INTO invoices (invoice_number, client_id, invoice_date, delivery_date, status, notes) VALUES (?, ?, ?, ?, ?, ?)',
-      [invoice_number, targetClientId, invoice_date, delivery_date, status || 'pending', notes]
+      [invoice_number, targetClientId, normalizedInvoiceDate, normalizedDeliveryDate, status || 'pending', normalizedNotes]
     );
 
     const invoiceId = result.insertId;
@@ -361,6 +365,9 @@ router.put('/:id', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const { invoice_number, client_id, invoice_date, delivery_date, status, notes, user_id } = req.body;
     const actingUserId = user_id || req.user?.id;
+    const normalizedInvoiceDate = invoice_date || new Date().toISOString().split('T')[0];
+    const normalizedDeliveryDate = delivery_date ? delivery_date : null;
+    const normalizedNotes = notes || null;
     
     const [oldInvoice] = await db.query('SELECT status, client_id FROM invoices WHERE id = ?', [req.params.id]);
     
@@ -372,7 +379,7 @@ router.put('/:id', requireRole('admin', 'accountant'), async (req, res) => {
     
     await db.query(
       'UPDATE invoices SET invoice_number = ?, client_id = ?, invoice_date = ?, delivery_date = ?, status = ?, notes = ? WHERE id = ?',
-      [invoice_number, client_id, invoice_date, delivery_date, status, notes, req.params.id]
+      [invoice_number, client_id, normalizedInvoiceDate, normalizedDeliveryDate, status, normalizedNotes, req.params.id]
     );
 
     if (status && status !== oldStatus && actingUserId) {
