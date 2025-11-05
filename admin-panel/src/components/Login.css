@@ -1,0 +1,202 @@
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #0a0e27;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-box {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  z-index: 10;
+  animation: fadeIn 0.8s ease-out;
+}
+
+.admin-badge {
+  position: absolute;
+  top: -15px;
+  right: 30px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 2px;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.login-box h1 {
+  color: #ffffff;
+  text-align: center;
+  margin-bottom: 10px;
+  font-size: 28px;
+  background: linear-gradient(135deg, #ffffff 0%, #a8b8ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 35px;
+  font-size: 14px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  font-size: 14px;
+  color: #ffffff;
+  transition: all 0.3s ease;
+}
+
+.form-group input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.login-btn {
+  width: 100%;
+  padding: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+.login-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(102, 126, 234, 0.6);
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background: rgba(220, 53, 69, 0.2);
+  backdrop-filter: blur(10px);
+  color: #ff6b6b;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 53, 69, 0.3);
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 13px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.success-message {
+  background: rgba(40, 167, 69, 0.2);
+  backdrop-filter: blur(10px);
+  color: #51cf66;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(40, 167, 69, 0.3);
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 13px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.recovery-link {
+  text-align: center;
+  margin-top: 20px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.recovery-link:hover {
+  color: #667eea;
+  text-decoration: underline;
+}
+
+.recovery-code {
+  margin-top: 25px;
+  padding: 15px;
+  background: rgba(102, 126, 234, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.recovery-code strong {
+  color: #a8b8ff;
+  font-size: 18px;
+  display: block;
+  margin-top: 8px;
+  letter-spacing: 2px;
+}
+
+
+.demo-credentials {
+  margin-top: 30px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f0f4ff 0%, #f8f0ff 100%);
+  border-radius: 8px;
+  border: 1px solid #e0e7ff;
+}
+
+.demo-credentials p {
+  margin: 8px 0;
+  font-size: 13px;
+  color: #2c3e50;
+}
+
+.demo-credentials code {
+  background: white;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  color: #667eea;
+  font-weight: 600;
+  border: 1px solid #e0e7ff;
+}
