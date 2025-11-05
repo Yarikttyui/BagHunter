@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import ColorBends from './ColorBends';
 import NotificationBell from './NotificationBell';
@@ -25,6 +25,35 @@ function AdminDashboard({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [selectedInvoiceDetails, setSelectedInvoiceDetails] = useState(null);
   const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
+
+  const [clientsTotal, setClientsTotal] = useState(0);
+  const [invoicesTotal, setInvoicesTotal] = useState(0);
+  const [transactionsTotal, setTransactionsTotal] = useState(0);
+
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+
+  const handleApiError = useCallback(
+    (error, contextMessage) => {
+      const status = error?.response?.status;
+      if (status === 401) {
+        console.error('Auth middleware error:', error?.response?.data || error.message);
+        if (typeof onLogout === 'function') {
+          onLogout();
+        }
+        return true;
+      }
+
+      if (contextMessage) {
+        console.error(contextMessage, error);
+      } else {
+        console.error(error);
+      }
+      return false;
+    },
+    [onLogout]
+  );
 
   const [draggedTab, setDraggedTab] = useState(null);
   const [tabOrder, setTabOrder] = useState(() => {
@@ -54,18 +83,11 @@ function AdminDashboard({ user, onLogout }) {
   const canDeleteTransactions = isAdmin;
   const canApproveInvoices = isAdmin || isAccountant;
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
-
-  const fetchData = async () => {
+  const fetchInitialData = useCallback(async () => {
     setLoading(true);
     try {
       const requests = [
         axios.get(`${API_URL}/reports/stats`),
-        axios.get(`${API_URL}/clients`),
-        axios.get(`${API_URL}/invoices`),
-        axios.get(`${API_URL}/transactions`),
         axios.get(`${API_URL}/profiles/${user.id}`)
       ];
       
@@ -76,25 +98,219 @@ function AdminDashboard({ user, onLogout }) {
       
       const responses = await Promise.all(requests);
 
-      setStats(responses[0].data);
-      setClients(responses[1].data);
-      setInvoices(responses[2].data);
-      setTransactions(responses[3].data);
-      setUserProfile(responses[4].data);
+      setStats(responses[0]?.data ?? null);
+      setUserProfile(responses[1]?.data ?? null);
       
-      if (isAdmin && responses[5]) {
-        setUsers(responses[5].data);
-      }
-      
-      if (isAdmin && responses[6]) {
-        setInvoiceLogs(responses[6].data);
+      if (isAdmin) {
+        setUsers(responses[2]?.data ?? []);
+        setInvoiceLogs(responses[3]?.data ?? []);
       }
     } catch (error) {
+      if (handleApiError(error, 'Ошибка загрузки данных')) {
+        return;
+      }
       console.error('Ошибка загрузки данных:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_URL, isAdmin, user.id]);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
+
+  const normalizePaginated = useCallback((data) => {
+    if (Array.isArray(data)) {
+      return {
+        items: data,
+        total: data.length,
+        page: 1,
+        pageSize: data.length || itemsPerPage,
+        hasMore: false
+      };
+    }
+
+    const items = Array.isArray(data?.items) ? data.items : [];
+    return {
+      items,
+      total: typeof data?.total === 'number' ? data.total : items.length,
+      page: data?.page || 1,
+      pageSize: data?.pageSize || itemsPerPage,
+      hasMore: Boolean(data?.hasMore)
+    };
+  }, [itemsPerPage]);
+
+  const loadClients = useCallback(async () => {
+    try {
+      setClientsLoading(true);
+      const params = {
+        page: currentPageClients,
+        pageSize: itemsPerPage
+      };
+      if (searchTermClients.trim()) {
+        params.search = searchTermClients.trim();
+      }
+
+      const { data } = await axios.get(`${API_URL}/clients`, { params });
+      const payload = normalizePaginated(data);
+
+      const maxPage = Math.max(1, Math.ceil((payload.total || 0) / (payload.pageSize || itemsPerPage || 1)));
+      if (payload.total > 0 && payload.items.length === 0 && currentPageClients > maxPage) {
+        setCurrentPageClients(maxPage);
+        return;
+      }
+
+      setClients(payload.items);
+      setClientsTotal(payload.total);
+    } catch (error) {
+      if (handleApiError(error, 'Ошибка загрузки клиентов')) {
+        return;
+      }
+    } finally {
+      setClientsLoading(false);
+    }
+  }, [API_URL, currentPageClients, itemsPerPage, normalizePaginated, searchTermClients]);
+
+  const loadInvoices = useCallback(async () => {
+    try {
+      setInvoicesLoading(true);
+      const params = {
+        page: currentPageInvoices,
+        pageSize: itemsPerPage
+      };
+
+      if (searchTermInvoices.trim()) {
+        params.search = searchTermInvoices.trim();
+      }
+
+      if (filtersInvoices.status) {
+        params.status = filtersInvoices.status;
+      }
+
+      if (filtersInvoices.dateFrom) {
+        params.dateFrom = filtersInvoices.dateFrom;
+      }
+
+      if (filtersInvoices.dateTo) {
+        params.dateTo = filtersInvoices.dateTo;
+      }
+
+      if (filtersInvoices.minAmount) {
+        params.minAmount = filtersInvoices.minAmount;
+      }
+
+      if (filtersInvoices.maxAmount) {
+        params.maxAmount = filtersInvoices.maxAmount;
+      }
+
+      const { data } = await axios.get(`${API_URL}/invoices`, { params });
+      const payload = normalizePaginated(data);
+      const maxPage = Math.max(1, Math.ceil((payload.total || 0) / (payload.pageSize || itemsPerPage || 1)));
+
+      if (payload.total > 0 && payload.items.length === 0 && currentPageInvoices > maxPage) {
+        setCurrentPageInvoices(maxPage);
+        return;
+      }
+
+      setInvoices(payload.items);
+      setInvoicesTotal(payload.total);
+    } catch (error) {
+      if (handleApiError(error, 'Ошибка загрузки накладных')) {
+        return;
+      }
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }, [
+    API_URL,
+    currentPageInvoices,
+    itemsPerPage,
+    normalizePaginated,
+    searchTermInvoices,
+    filtersInvoices
+  ]);
+
+  const loadTransactions = useCallback(async () => {
+    try {
+      setTransactionsLoading(true);
+      const params = {
+        page: currentPageTransactions,
+        pageSize: itemsPerPage
+      };
+
+      if (searchTermTransactions.trim()) {
+        params.search = searchTermTransactions.trim();
+      }
+
+      if (filtersTransactions.transactionType) {
+        params.transactionType = filtersTransactions.transactionType;
+      }
+
+      if (filtersTransactions.dateFrom) {
+        params.dateFrom = filtersTransactions.dateFrom;
+      }
+
+      if (filtersTransactions.dateTo) {
+        params.dateTo = filtersTransactions.dateTo;
+      }
+
+      if (filtersTransactions.minAmount) {
+        params.minAmount = filtersTransactions.minAmount;
+      }
+
+      if (filtersTransactions.maxAmount) {
+        params.maxAmount = filtersTransactions.maxAmount;
+      }
+
+      const { data } = await axios.get(`${API_URL}/transactions`, { params });
+      const payload = normalizePaginated(data);
+
+      const maxPage = Math.max(
+        1,
+        Math.ceil((payload.total || 0) / (payload.pageSize || itemsPerPage || 1))
+      );
+
+      if (payload.total > 0 && payload.items.length === 0 && currentPageTransactions > maxPage) {
+        setCurrentPageTransactions(maxPage);
+        return;
+      }
+
+      setTransactions(payload.items);
+      setTransactionsTotal(payload.total);
+    } catch (error) {
+      if (handleApiError(error, 'Ошибка загрузки транзакций')) {
+        return;
+      }
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }, [
+    API_URL,
+    currentPageTransactions,
+    itemsPerPage,
+    normalizePaginated,
+    searchTermTransactions,
+    filtersTransactions
+  ]);
+
+  const refreshAllData = useCallback(() => {
+    fetchInitialData();
+    loadClients();
+    loadInvoices();
+    loadTransactions();
+  }, [fetchInitialData, loadClients, loadInvoices, loadTransactions]);
+
+  useEffect(() => {
+    loadClients();
+  }, [loadClients]);
+
+  useEffect(() => {
+    loadInvoices();
+  }, [loadInvoices]);
+
+  useEffect(() => {
+    loadTransactions();
+  }, [loadTransactions]);
 
   const openModal = (type, data = {}) => {
     setModalType(type);
@@ -137,7 +353,7 @@ function AdminDashboard({ user, onLogout }) {
       }
       
       closeModal();
-      fetchData();
+      refreshAllData();
     } catch (error) {
       console.error('Ошибка сохранения:', error);
       alert('Ошибка при сохранении данных');
@@ -149,7 +365,7 @@ function AdminDashboard({ user, onLogout }) {
     
     try {
       await axios.delete(`${API_URL}/${type}/${id}`);
-      fetchData();
+      refreshAllData();
     } catch (error) {
       console.error('Ошибка удаления:', error);
     }
@@ -160,7 +376,7 @@ function AdminDashboard({ user, onLogout }) {
     
     try {
       await axios.delete(`${API_URL}/users/${userId}`);
-      fetchData();
+      refreshAllData();
     } catch (error) {
       console.error('Ошибка удаления пользователя:', error);
       alert('Ошибка при удалении пользователя');
@@ -223,7 +439,7 @@ const downloadInvoicePdf = async (invoiceId) => {
         user_id: user.id
       });
       
-      fetchData();
+      refreshAllData();
       alert(`Накладная ${newStatus === 'in_transit' ? 'одобрена и отправлена' : newStatus === 'delivered' ? 'помечена как доставленная' : 'отклонена'}`);
     } catch (error) {
       console.error('Ошибка обновления статуса:', error);
@@ -280,80 +496,12 @@ const downloadInvoicePdf = async (invoiceId) => {
   };
 
   
-  const filteredClients = useMemo(() => {
-    return clients.filter(client => {
-      const searchLower = searchTermClients.toLowerCase();
-      return (
-        client.company_name?.toLowerCase().includes(searchLower) ||
-        client.email?.toLowerCase().includes(searchLower) ||
-        client.phone?.includes(searchTermClients) ||
-        client.inn?.includes(searchTermClients) ||
-        client.address?.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [clients, searchTermClients]);
+  const filteredClients = useMemo(() => clients, [clients]);
 
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter(invoice => {
-      const searchLower = searchTermInvoices.toLowerCase();
-      const matchesSearch = 
-        invoice.invoice_number?.toLowerCase().includes(searchLower) ||
-        invoice.client_name?.toLowerCase().includes(searchLower);
+  const filteredInvoices = useMemo(() => invoices, [invoices]);
 
-      if (!matchesSearch) return false;
+  const filteredTransactions = useMemo(() => transactions, [transactions]);
 
-      if (filtersInvoices.status && invoice.status !== filtersInvoices.status) return false;
-      
-      if (filtersInvoices.dateFrom) {
-        const invoiceDate = new Date(invoice.invoice_date);
-        const filterDate = new Date(filtersInvoices.dateFrom);
-        if (invoiceDate < filterDate) return false;
-      }
-
-      if (filtersInvoices.dateTo) {
-        const invoiceDate = new Date(invoice.invoice_date);
-        const filterDate = new Date(filtersInvoices.dateTo);
-        if (invoiceDate > filterDate) return false;
-      }
-
-      if (filtersInvoices.minAmount && invoice.total_amount < Number(filtersInvoices.minAmount)) return false;
-      if (filtersInvoices.maxAmount && invoice.total_amount > Number(filtersInvoices.maxAmount)) return false;
-
-      return true;
-    });
-  }, [invoices, searchTermInvoices, filtersInvoices]);
-
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(transaction => {
-      const searchLower = searchTermTransactions.toLowerCase();
-      const matchesSearch = 
-        transaction.description?.toLowerCase().includes(searchLower) ||
-        transaction.payment_method?.toLowerCase().includes(searchLower);
-
-      if (!matchesSearch) return false;
-
-      if (filtersTransactions.transactionType && transaction.transaction_type !== filtersTransactions.transactionType) return false;
-      
-      if (filtersTransactions.dateFrom) {
-        const transDate = new Date(transaction.transaction_date);
-        const filterDate = new Date(filtersTransactions.dateFrom);
-        if (transDate < filterDate) return false;
-      }
-
-      if (filtersTransactions.dateTo) {
-        const transDate = new Date(transaction.transaction_date);
-        const filterDate = new Date(filtersTransactions.dateTo);
-        if (transDate > filterDate) return false;
-      }
-
-      if (filtersTransactions.minAmount && transaction.amount < Number(filtersTransactions.minAmount)) return false;
-      if (filtersTransactions.maxAmount && transaction.amount > Number(filtersTransactions.maxAmount)) return false;
-
-      return true;
-    });
-  }, [transactions, searchTermTransactions, filtersTransactions]);
-
-  
   const sortData = (data, column, direction) => {
     if (!column) return data;
 
@@ -382,13 +530,6 @@ const downloadInvoicePdf = async (invoiceId) => {
       if (aVal > bVal) return direction === 'asc' ? 1 : -1;
       return 0;
     });
-  };
-
-  
-  const paginateData = (data, currentPage, perPage) => {
-    const startIndex = (currentPage - 1) * perPage;
-    const endIndex = startIndex + perPage;
-    return data.slice(startIndex, endIndex);
   };
 
   const defaultTabs = [
@@ -446,10 +587,6 @@ const downloadInvoicePdf = async (invoiceId) => {
   const sortedClients = sortData(filteredClients, sortColumn, sortDirection);
   const sortedInvoices = sortData(filteredInvoices, sortColumn, sortDirection);
   const sortedTransactions = sortData(filteredTransactions, sortColumn, sortDirection);
-
-  const paginatedClients = paginateData(sortedClients, currentPageClients, itemsPerPage);
-  const paginatedInvoices = paginateData(sortedInvoices, currentPageInvoices, itemsPerPage);
-  const paginatedTransactions = paginateData(sortedTransactions, currentPageTransactions, itemsPerPage);
 
   const handleSort = (column, direction) => {
     setSortColumn(column);
@@ -552,7 +689,9 @@ const downloadInvoicePdf = async (invoiceId) => {
                   <h3>Накладные</h3>
                   <div className="value">{stats.invoices?.total_invoices || 0}</div>
                   <div className="label">
-                    Доставлено: {stats.invoices?.delivered || 0} | В пути: {stats.invoices?.in_transit || 0}
+                    Доставлено: <span style= {{color: '#28a745'}}>{stats.invoices?.delivered || 0}</span> | 
+                    В пути: <span style= {{color: '#17a2b8'}}>{stats.invoices?.in_transit || 0}</span> |
+                    Ожидают: <span style= {{color: '#ffc107'}}>{stats.invoices?.pending || 0}</span>
                   </div>
                 </div>
                 <div className="stat-card">
@@ -582,32 +721,38 @@ const downloadInvoicePdf = async (invoiceId) => {
 
             <h2 className="section-title" style={{marginTop: '40px'}}>Последние накладные</h2>
             <div className="table-wrapper table-wrapper--dashboard">
-              <table className="glass-table glass-table--compact">
-                <thead>
-                  <tr>
-                    <th>№</th>
-                    <th>Клиент</th>
-                    <th>Дата</th>
-                    <th>Сумма</th>
-                    <th>Статус</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.slice(0, 5).map(invoice => (
-                    <tr key={invoice.id}>
-                      <td>{invoice.invoice_number}</td>
-                      <td>{invoice.client_name}</td>
-                      <td>{formatDate(invoice.invoice_date)}</td>
-                      <td>{formatCurrency(invoice.total_amount)}</td>
-                      <td>
-                        <span className={`status-badge status-${invoice.status}`}>
-                          {getStatusText(invoice.status)}
-                        </span>
-                      </td>
+              {invoicesLoading ? (
+                <div className="table-empty">Загрузка...</div>
+              ) : sortedInvoices.length === 0 ? (
+                <div className="table-empty">Данные отсутствуют</div>
+              ) : (
+                <table className="glass-table glass-table--compact">
+                  <thead>
+                    <tr>
+                      <th>№</th>
+                      <th>Клиент</th>
+                      <th>Дата</th>
+                      <th>Сумма</th>
+                      <th>Статус</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {sortedInvoices.slice(0, 5).map((invoice) => (
+                      <tr key={invoice.id}>
+                        <td>{invoice.invoice_number}</td>
+                        <td>{invoice.client_name}</td>
+                        <td>{formatDate(invoice.invoice_date)}</td>
+                        <td>{formatCurrency(invoice.total_amount)}</td>
+                        <td>
+                          <span className={`status-badge status-${invoice.status}`}>
+                            {getStatusText(invoice.status)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
@@ -662,7 +807,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                   )
                 }
               ]}
-              data={paginatedClients}
+              data={sortedClients}
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={handleSort}
@@ -787,7 +932,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                   )
                 }
               ]}
-              data={paginatedInvoices}
+              data={sortedInvoices}
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={handleSort}
@@ -884,7 +1029,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                   )
                 }
               ]}
-              data={paginatedTransactions}
+              data={sortedTransactions}
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={handleSort}
@@ -1203,7 +1348,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                           await axios.post(`${API_URL}/profiles/${user.id}/avatar`, formData, {
                             headers: { 'Content-Type': 'multipart/form-data' }
                           });
-                          fetchData();
+                          fetchInitialData();
                         } catch (error) {
                           alert('Ошибка загрузки аватара');
                         }
@@ -1271,7 +1416,7 @@ const downloadInvoicePdf = async (invoiceId) => {
             <form onSubmit={handleSubmit}>
               {modalType === 'client' && (
                 <>
-                  <label>Название *</label>
+                  <label style={{color: '#ffffff'}}>Название *</label>
                   <input
                     type="text"
                     value={formData.company_name || ''}
@@ -1279,28 +1424,28 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Email</label>
+                  <label style={{color: '#ffffff'}}>Email</label>
                   <input
                     type="email"
                     value={formData.email || ''}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                   />
 
-                  <label>Телефон</label>
+                  <label style={{color: '#ffffff'}}>Телефон</label>
                   <input
                     type="text"
                     value={formData.phone || ''}
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   />
 
-                  <label>Адрес</label>
+                  <label  style={{color: '#ffffff'}}>Адрес</label>
                   <textarea
                     value={formData.address || ''}
                     onChange={(e) => setFormData({...formData, address: e.target.value})}
                     rows="3"
                   />
 
-                  <label>ИНН</label>
+                  <label style={{color: '#ffffff'}}>ИНН</label>
                   <input
                     type="text"
                     value={formData.inn || ''}
@@ -1311,7 +1456,7 @@ const downloadInvoicePdf = async (invoiceId) => {
 
               {modalType === 'invoice' && (
                 <>
-                  <label>Номер накладной *</label>
+                  <label style={{color: '#ffffff'}}>Номер накладной *</label>
                   <input
                     type="text"
                     value={formData.invoice_number || ''}
@@ -1319,19 +1464,19 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Клиент *</label>
+                  <label style={{color: '#ffffff'}}>Клиент *</label>
                   <select
                     value={formData.client_id || ''}
                     onChange={(e) => setFormData({...formData, client_id: e.target.value})}
                     required
                   >
-                    <option value="">Выберите клиента</option>
+                    <option value="" style={{color: '#ffffff'}}>Выберите клиента</option>
                     {clients.map(client => (
                       <option key={client.id} value={client.id}>{client.company_name}</option>
                     ))}
                   </select>
 
-                  <label>Дата накладной *</label>
+                  <label style={{color: '#ffffff'}}>Дата накладной *</label>
                   <input
                     type="date"
                     value={formData.invoice_date || ''}
@@ -1339,14 +1484,14 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Дата доставки</label>
+                  <label style={{color: '#ffffff'}}>Дата доставки</label>
                   <input
                     type="date"
                     value={formData.delivery_date || ''}
                     onChange={(e) => setFormData({...formData, delivery_date: e.target.value})}
                   />
 
-                  <label>Статус *</label>
+                  <label style={{color: '#ffffff'}}>Статус *</label>
                   <select
                     value={formData.status || 'pending'}
                     onChange={(e) => setFormData({...formData, status: e.target.value})}
@@ -1358,7 +1503,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                     <option value="cancelled">Отменено</option>
                   </select>
 
-                  <label>Примечания</label>
+                  <label style={{color: '#ffffff'}}>Примечания</label>
                   <textarea
                     value={formData.notes || ''}
                     onChange={(e) => setFormData({...formData, notes: e.target.value})}
@@ -1369,7 +1514,7 @@ const downloadInvoicePdf = async (invoiceId) => {
 
               {modalType === 'transaction' && (
                 <>
-                  <label>Тип транзакции *</label>
+                  <label style={{color: '#ffffff'}}>Тип транзакции *</label>
                   <select
                     value={formData.transaction_type || 'income'}
                     onChange={(e) => setFormData({...formData, transaction_type: e.target.value})}
@@ -1379,7 +1524,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                     <option value="expense">Расход</option>
                   </select>
 
-                  <label>Сумма *</label>
+                  <label style={{color: '#ffffff'}}>Сумма *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1388,7 +1533,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Дата *</label>
+                  <label style={{color: '#ffffff'}}>Дата *</label>
                   <input
                     type="date"
                     value={formData.transaction_date || ''}
@@ -1396,7 +1541,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Метод оплаты *</label>
+                  <label style={{color: '#ffffff'}}>Метод оплаты *</label>
                   <select
                     value={formData.payment_method || 'cash'}
                     onChange={(e) => setFormData({...formData, payment_method: e.target.value})}
@@ -1408,7 +1553,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                     <option value="other">Другое</option>
                   </select>
 
-                  <label>Описание</label>
+                  <label style={{color: '#ffffff'}}>Описание</label>
                   <textarea
                     value={formData.description || ''}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
@@ -1419,35 +1564,25 @@ const downloadInvoicePdf = async (invoiceId) => {
 
               {modalType === 'user' && (
                 <>
-                  <label>Логин *</label>
+                  <label style={{color: '#ffffff'}}>Логин *</label>
                   <input
                     type="text"
                     value={formData.username || ''}
                     onChange={(e) => setFormData({...formData, username: e.target.value})}
                     required
                     disabled={formData.id ? true : false}
+                    style={{ WebkitTextFillColor: 'white' }}
                   />
 
-                  {!formData.id && (
-                    <>
-                      <label>Пароль *</label>
-                      <input
-                        type="password"
-                        value={formData.password || ''}
-                        onChange={(e) => setFormData({...formData, password: e.target.value})}
-                        required
-                      />
-                    </>
-                  )}
 
-                  <label>Email</label>
+                  <label style={{color: '#ffffff'}}>Email</label>
                   <input
                     type="email"
                     value={formData.email || ''}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                   />
 
-                  <label>Полное имя *</label>
+                  <label style={{color: '#ffffff'}}>Полное имя *</label>
                   <input
                     type="text"
                     value={formData.full_name || ''}
@@ -1455,14 +1590,14 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Телефон</label>
+                  <label style={{color: '#ffffff'}}>Телефон</label>
                   <input
                     type="text"
                     value={formData.phone || ''}
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   />
 
-                  <label>Роль *</label>
+                  <label style={{color: '#ffffff'}}>Роль *</label>
                   <select
                     value={formData.role || 'client'}
                     onChange={(e) => setFormData({...formData, role: e.target.value})}

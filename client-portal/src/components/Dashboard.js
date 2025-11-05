@@ -8,6 +8,16 @@ import { API_BASE_URL } from '../config/api';
 
 const API_URL = API_BASE_URL;
 
+const normalizeListResponse = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && Array.isArray(payload.items)) {
+    return payload.items;
+  }
+  return [];
+};
+
 function Dashboard({ user, onLogout }) {
   const [invoices, setInvoices] = useState([]);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -36,7 +46,7 @@ function Dashboard({ user, onLogout }) {
         axios.get(`${API_URL}/products`)
       ]);
 
-      setInvoices(invoicesRes.data);
+      setInvoices(normalizeListResponse(invoicesRes.data));
       setStats(statsRes.data);
       setProducts(productsRes.data);
     } catch (error) {
@@ -268,7 +278,7 @@ function Dashboard({ user, onLogout }) {
               </div>
             )}
 
-            <h3 style={{marginTop: '30px', marginBottom: '15px'}}>Товары</h3>
+            <h3 style={{marginTop: '30px', marginBottom: '15px', color: '#ffffff'}}>Товары</h3>
             <div className="card table-card">
               <table className="glass-table">
                 <thead>
@@ -292,7 +302,7 @@ function Dashboard({ user, onLogout }) {
               </table>
             </div>
 
-            <h3 style={{marginTop: '40px', marginBottom: '15px'}}>💬 Комментарии</h3>
+            <h3 style={{marginTop: '40px', marginBottom: '15px', color: '#ffffff'}}>Комментарии</h3>
             <Comments invoiceId={selectedInvoice.id} user={user} />
           </div>
         </div>
@@ -363,8 +373,8 @@ function Dashboard({ user, onLogout }) {
           </button>
         </div>
         
-        <div className="card table-card">
-          <table className="glass-table">
+        <div className="table-wrapper">
+          <table className="glass-table glass-table--compact">
             <thead>
               <tr>
                 <th>№ Накладной</th>

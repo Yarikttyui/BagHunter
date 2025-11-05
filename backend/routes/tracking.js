@@ -187,21 +187,10 @@ router.get('/:trackingCode', async (req, res) => {
       WHERE invoice_id = ?
     `, [invoice[0].id]);
     
-    const [transport] = await db.query(`
-      SELECT 
-        v.vehicle_number, v.brand, v.model,
-        d.full_name as driver_name, d.phone as driver_phone
-      FROM invoices i
-      LEFT JOIN vehicles v ON i.vehicle_id = v.id
-      LEFT JOIN drivers d ON i.driver_id = d.id
-      WHERE i.id = ?
-    `, [invoice[0].id]);
-    
     res.json({
       invoice: invoice[0],
       history: history,
-      delivery: delivery[0] || null,
-      transport: transport[0] || null
+      delivery: delivery[0] || null
     });
   } catch (error) {
     console.error('Ошибка публичного трекинга:', error);

@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import './Home.css';
-import { ADMIN_PANEL_URL } from '../config/api';
+import { CLIENT_PORTAL_URL } from '../config/api';
 
 const Home = () => {
-  const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState(0);
 
   const categories = [
@@ -72,7 +70,7 @@ const Home = () => {
   }, [categories.length]);
 
   const handleGetStarted = () => {
-    window.location.href = ADMIN_PANEL_URL;
+    window.location.href = CLIENT_PORTAL_URL;
   };
 
   return (

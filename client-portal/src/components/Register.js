@@ -26,9 +26,15 @@ function Register({ onSwitchToLogin }) {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
+
+    let nextValue = value;
+    if (name === 'company_inn') {
+      nextValue = value.replace(/\D/g, '');
+    }
+
     setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: nextValue
     }));
   };
 
@@ -213,6 +219,8 @@ function Register({ onSwitchToLogin }) {
                   <span>ИНН</span>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    pattern="\d*"
                     name="company_inn"
                     value={formData.company_inn}
                     onChange={handleChange}

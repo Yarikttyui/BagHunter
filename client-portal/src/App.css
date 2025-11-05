@@ -2,19 +2,20 @@
   --accent-primary: #667eea;
   --accent-secondary: #764ba2;
   --accent-highlight: #43e97b;
-  --glass-surface-soft: linear-gradient(150deg, rgba(22, 29, 60, 0.58) 0%, rgba(11, 16, 38, 0.48) 100%);
-  --glass-surface-strong: linear-gradient(150deg, rgba(15, 21, 46, 0.52) 0%, rgba(20, 28, 58, 0.38) 100%);
-  --glass-row: rgba(12, 18, 42, 0.32);
-  --glass-row-alt: rgba(16, 22, 48, 0.26);
-  --glass-border: rgba(126, 146, 255, 0.2);
-  --glass-divider: rgba(255, 255, 255, 0.14);
-  --glass-header: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(102, 126, 234, 0.16) 100%);
-  --glass-hover: rgba(102, 126, 234, 0.16);
-  --glass-text-strong: rgba(255, 255, 255, 0.98);
+  --glass-surface-soft: linear-gradient(140deg, rgba(255, 255, 255, 0.14) 0%, rgba(102, 126, 234, 0.08) 100%);
+  --glass-surface-strong: linear-gradient(150deg, rgba(18, 26, 58, 0.68) 0%, rgba(30, 44, 92, 0.6) 100%);
+  --glass-surface-table: linear-gradient(160deg, rgba(16, 24, 52, 0.55) 0%, rgba(29, 42, 82, 0.48) 60%, rgba(88, 116, 228, 0.32) 100%);
+  --glass-row: rgba(18, 29, 66, 0.42);
+  --glass-row-alt: rgba(15, 24, 57, 0.36);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-divider: rgba(255, 255, 255, 0.1);
+  --glass-header: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(102, 126, 234, 0.2) 100%);
+  --glass-hover: rgba(102, 126, 234, 0.34);
+  --glass-text-strong: rgba(255, 255, 255, 0.95);
   --glass-text-muted: rgba(255, 255, 255, 0.78);
-  --glass-shadow: 0 24px 48px rgba(6, 10, 28, 0.42);
-  --glass-shadow-soft: 0 20px 36px rgba(6, 12, 32, 0.32);
-  --glass-blur: 26px;
+  --glass-shadow: 0 24px 48px rgba(6, 10, 28, 0.45);
+  --glass-shadow-soft: 0 20px 36px rgba(6, 12, 32, 0.35);
+  --glass-blur: 32px;
 }
 
 @keyframes fadeIn {
@@ -69,14 +70,16 @@
 
 .glass-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   background: transparent;
+  color: var(--glass-text-muted);
 }
 
 .glass-table thead tr {
   background: var(--glass-header);
-  backdrop-filter: blur(calc(var(--glass-blur) / 1.5));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) / 1.5));
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.6));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.6));
 }
 
 .glass-table th {
@@ -97,6 +100,35 @@
   border-bottom: 1px solid var(--glass-divider);
 }
 
+.glass-table th:not(:last-child),
+.glass-table td:not(:last-child) {
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-table thead tr th:first-child {
+  border-top-left-radius: 18px;
+}
+
+.glass-table thead tr th:last-child {
+  border-top-right-radius: 18px;
+}
+
+.glass-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 18px;
+}
+
+.glass-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 18px;
+}
+
+.glass-table--compact th {
+  padding: 15px 18px;
+}
+
+.glass-table--compact td {
+  padding: 12px 18px;
+}
+
 .glass-table tbody tr {
   background: var(--glass-row);
   transition: transform 0.3s ease, background 0.3s ease;
@@ -108,7 +140,7 @@
 
 .glass-table tbody tr:hover {
   background: var(--glass-hover);
-  transform: translateX(6px);
+  transform: translateX(4px);
 }
 
 .glass-table tbody tr:last-child td {
@@ -119,6 +151,34 @@
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.table-wrapper {
+  padding: 0;
+  background: var(--glass-surface-table);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.75));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.75));
+  border-radius: 20px;
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-soft);
+  margin-top: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.table-wrapper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 55%, transparent 70%);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.table-wrapper > * {
+  position: relative;
+  z-index: 1;
 }
 
 
@@ -478,7 +538,6 @@
 .modal-close-btn:hover {
   background: rgba(220, 53, 69, 0.2);
   border-color: rgba(220, 53, 69, 0.5);
-  transform: rotate(90deg);
 }
 
 .invoice-form {
@@ -682,6 +741,12 @@
   border-color: rgba(102, 126, 234, 0.5);
   background: rgba(255, 255, 255, 0.08);
   box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.item-col-product select option {
+  background-color: #1a1a2e;
+  color: #ffffff;
+  padding: 8px;
 }
 
 .item-total-display {

@@ -5,6 +5,12 @@ const emailService = require('../services/emailService');
 const pdfService = require('../services/pdfService');
 const excelService = require('../services/excelService');
 const { requireRole } = require('../middleware/auth');
+const {
+  getPagination,
+  parseNumberRange,
+  applyDateRange,
+  applyNumberRange
+} = require('../utils/queryHelpers');
 
 const STATUS_TEXT = {
   pending: 'Ожидает подтверждения',
@@ -47,37 +53,95 @@ async function fetchInvoiceWithClient(invoiceId) {
   return rows;
 }
 
-router.get('/', async (req, res) => {
+router.get('/', requireRole('admin', 'accountant', 'client'), async (req, res) => {
   try {
     const currentUser = req.user || {};
-    let query = `
-      SELECT i.*, c.company_name as client_name
-      FROM invoices i
-      LEFT JOIN clients c ON i.client_id = c.id
-    `;
-    const params = [];
+    const search = (req.query.search || '').trim();
+    const status = (req.query.status || '').trim();
+    const clientIdFilter = req.query.clientId ? Number.parseInt(req.query.clientId, 10) : undefined;
+    const dateFrom = req.query.dateFrom;
+    const dateTo = req.query.dateTo;
+    const { min: minAmount, max: maxAmount } = parseNumberRange(req.query, 'minAmount', 'maxAmount');
 
-    if (currentUser.role === 'client') {
-      if (!currentUser.client_id) {
-        return res.json([]);
+    const applyUserFilter = async () => {
+      if (currentUser.role === 'client') {
+        if (!currentUser.client_id) {
+          return { conditions: ['1 = 0'], params: [] };
+        }
+        return { conditions: ['i.client_id = ?'], params: [currentUser.client_id] };
       }
-      query += ' WHERE i.client_id = ?';
-      params.push(currentUser.client_id);
-    } else if (req.query.userRole === 'client' && req.query.userId) {
-      const [userRows] = await db.query('SELECT client_id FROM users WHERE id = ?', [req.query.userId]);
-      const clientId = userRows[0]?.client_id;
-      if (clientId) {
-        query += ' WHERE i.client_id = ?';
-        params.push(clientId);
-      } else {
-        return res.json([]);
+
+      if (req.query.userRole === 'client' && req.query.userId) {
+        const [userRows] = await db.query('SELECT client_id FROM users WHERE id = ?', [req.query.userId]);
+        const clientId = userRows[0]?.client_id;
+        if (!clientId) {
+          return { conditions: ['1 = 0'], params: [] };
+        }
+        return { conditions: ['i.client_id = ?'], params: [clientId] };
       }
+
+      return { conditions: [], params: [] };
+    };
+
+    const { conditions: baseConditions, params: baseParams } = await applyUserFilter();
+    const { page, pageSize, offset } = getPagination(req.query);
+
+    const conditions = [...baseConditions];
+    const params = [...baseParams];
+
+    if (search) {
+      const term = `%${search.toLowerCase()}%`;
+      conditions.push('(LOWER(i.invoice_number) LIKE ? OR LOWER(c.company_name) LIKE ?)');
+      params.push(term, term);
     }
 
-    query += ' ORDER BY i.created_at DESC';
+    if (status) {
+      conditions.push('i.status = ?');
+      params.push(status);
+    }
 
-    const [rows] = await db.query(query, params);
-    res.json(rows);
+    if (clientIdFilter) {
+      conditions.push('i.client_id = ?');
+      params.push(clientIdFilter);
+    }
+
+    applyDateRange(conditions, params, 'i.invoice_date', dateFrom, dateTo);
+    applyNumberRange(conditions, params, 'i.total_amount', minAmount, maxAmount);
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const [[{ total }]] = await db.query(
+      `
+        SELECT COUNT(*) AS total
+        FROM invoices i
+        LEFT JOIN clients c ON i.client_id = c.id
+        ${whereClause}
+      `,
+      params
+    );
+
+    const [rows] = await db.query(
+      `
+        SELECT 
+          i.*,
+          c.company_name as client_name
+        FROM invoices i
+        LEFT JOIN clients c ON i.client_id = c.id
+        ${whereClause}
+        ORDER BY i.created_at DESC
+        LIMIT ?
+        OFFSET ?
+      `,
+      [...params, pageSize, offset]
+    );
+
+    res.json({
+      items: rows,
+      total,
+      page,
+      pageSize,
+      hasMore: offset + rows.length < total
+    });
   } catch (error) {
     console.error('Не удалось получить список накладных:', error);
     res.status(500).json({ error: error.message });
@@ -124,7 +188,7 @@ router.get('/logs/all', requireRole('admin'), async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireRole('admin', 'accountant', 'client'), async (req, res) => {
   try {
     const currentUser = req.user || {};
     const invoiceRows = await fetchInvoiceWithClient(req.params.id);
@@ -151,7 +215,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.get('/:id/pdf', async (req, res) => {
+router.get('/:id/pdf', requireRole('admin', 'accountant', 'client'), async (req, res) => {
   try {
     const currentUser = req.user || {};
     const invoiceRows = await fetchInvoiceWithClient(req.params.id);
@@ -211,6 +275,10 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
       items
     } = req.body;
 
+    const normalizedInvoiceDate = invoice_date || new Date().toISOString().split('T')[0];
+    const normalizedDeliveryDate = delivery_date ? delivery_date : null;
+    const normalizedNotes = notes || null;
+
     let targetClientId = client_id;
 
     if (currentUser.role === 'client') {
@@ -222,7 +290,7 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
     
     const [result] = await db.query(
       'INSERT INTO invoices (invoice_number, client_id, invoice_date, delivery_date, status, notes) VALUES (?, ?, ?, ?, ?, ?)',
-      [invoice_number, targetClientId, invoice_date, delivery_date, status || 'pending', notes]
+      [invoice_number, targetClientId, normalizedInvoiceDate, normalizedDeliveryDate, status || 'pending', normalizedNotes]
     );
 
     const invoiceId = result.insertId;
@@ -297,6 +365,9 @@ router.put('/:id', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const { invoice_number, client_id, invoice_date, delivery_date, status, notes, user_id } = req.body;
     const actingUserId = user_id || req.user?.id;
+    const normalizedInvoiceDate = invoice_date || new Date().toISOString().split('T')[0];
+    const normalizedDeliveryDate = delivery_date ? delivery_date : null;
+    const normalizedNotes = notes || null;
     
     const [oldInvoice] = await db.query('SELECT status, client_id FROM invoices WHERE id = ?', [req.params.id]);
     
@@ -308,7 +379,7 @@ router.put('/:id', requireRole('admin', 'accountant'), async (req, res) => {
     
     await db.query(
       'UPDATE invoices SET invoice_number = ?, client_id = ?, invoice_date = ?, delivery_date = ?, status = ?, notes = ? WHERE id = ?',
-      [invoice_number, client_id, invoice_date, delivery_date, status, notes, req.params.id]
+      [invoice_number, client_id, normalizedInvoiceDate, normalizedDeliveryDate, status, normalizedNotes, req.params.id]
     );
 
     if (status && status !== oldStatus && actingUserId) {

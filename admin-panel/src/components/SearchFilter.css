@@ -105,7 +105,8 @@
 }
 
 .filter-select option {
-  color: #101428;
+  background-color: #101428;
+  color: #ffffff;
 }
 
 .filter-input::placeholder {
