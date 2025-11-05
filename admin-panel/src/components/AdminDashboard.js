@@ -689,7 +689,9 @@ const downloadInvoicePdf = async (invoiceId) => {
                   <h3>Накладные</h3>
                   <div className="value">{stats.invoices?.total_invoices || 0}</div>
                   <div className="label">
-                    Доставлено: {stats.invoices?.delivered || 0} | В пути: {stats.invoices?.in_transit || 0}
+                    Доставлено: <span style= {{color: '#28a745'}}>{stats.invoices?.delivered || 0}</span> | 
+                    В пути: <span style= {{color: '#17a2b8'}}>{stats.invoices?.in_transit || 0}</span> |
+                    Ожидают: <span style= {{color: '#ffc107'}}>{stats.invoices?.pending || 0}</span>
                   </div>
                 </div>
                 <div className="stat-card">
@@ -1414,7 +1416,7 @@ const downloadInvoicePdf = async (invoiceId) => {
             <form onSubmit={handleSubmit}>
               {modalType === 'client' && (
                 <>
-                  <label>Название *</label>
+                  <label style={{color: '#ffffff'}}>Название *</label>
                   <input
                     type="text"
                     value={formData.company_name || ''}
@@ -1422,28 +1424,28 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Email</label>
+                  <label style={{color: '#ffffff'}}>Email</label>
                   <input
                     type="email"
                     value={formData.email || ''}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                   />
 
-                  <label>Телефон</label>
+                  <label style={{color: '#ffffff'}}>Телефон</label>
                   <input
                     type="text"
                     value={formData.phone || ''}
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   />
 
-                  <label>Адрес</label>
+                  <label  style={{color: '#ffffff'}}>Адрес</label>
                   <textarea
                     value={formData.address || ''}
                     onChange={(e) => setFormData({...formData, address: e.target.value})}
                     rows="3"
                   />
 
-                  <label>ИНН</label>
+                  <label style={{color: '#ffffff'}}>ИНН</label>
                   <input
                     type="text"
                     value={formData.inn || ''}
@@ -1454,7 +1456,7 @@ const downloadInvoicePdf = async (invoiceId) => {
 
               {modalType === 'invoice' && (
                 <>
-                  <label>Номер накладной *</label>
+                  <label style={{color: '#ffffff'}}>Номер накладной *</label>
                   <input
                     type="text"
                     value={formData.invoice_number || ''}
@@ -1462,19 +1464,19 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Клиент *</label>
+                  <label style={{color: '#ffffff'}}>Клиент *</label>
                   <select
                     value={formData.client_id || ''}
                     onChange={(e) => setFormData({...formData, client_id: e.target.value})}
                     required
                   >
-                    <option value="">Выберите клиента</option>
+                    <option value="" style={{color: '#ffffff'}}>Выберите клиента</option>
                     {clients.map(client => (
                       <option key={client.id} value={client.id}>{client.company_name}</option>
                     ))}
                   </select>
 
-                  <label>Дата накладной *</label>
+                  <label style={{color: '#ffffff'}}>Дата накладной *</label>
                   <input
                     type="date"
                     value={formData.invoice_date || ''}
@@ -1482,14 +1484,14 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Дата доставки</label>
+                  <label style={{color: '#ffffff'}}>Дата доставки</label>
                   <input
                     type="date"
                     value={formData.delivery_date || ''}
                     onChange={(e) => setFormData({...formData, delivery_date: e.target.value})}
                   />
 
-                  <label>Статус *</label>
+                  <label style={{color: '#ffffff'}}>Статус *</label>
                   <select
                     value={formData.status || 'pending'}
                     onChange={(e) => setFormData({...formData, status: e.target.value})}
@@ -1501,7 +1503,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                     <option value="cancelled">Отменено</option>
                   </select>
 
-                  <label>Примечания</label>
+                  <label style={{color: '#ffffff'}}>Примечания</label>
                   <textarea
                     value={formData.notes || ''}
                     onChange={(e) => setFormData({...formData, notes: e.target.value})}
@@ -1512,7 +1514,7 @@ const downloadInvoicePdf = async (invoiceId) => {
 
               {modalType === 'transaction' && (
                 <>
-                  <label>Тип транзакции *</label>
+                  <label style={{color: '#ffffff'}}>Тип транзакции *</label>
                   <select
                     value={formData.transaction_type || 'income'}
                     onChange={(e) => setFormData({...formData, transaction_type: e.target.value})}
@@ -1522,7 +1524,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                     <option value="expense">Расход</option>
                   </select>
 
-                  <label>Сумма *</label>
+                  <label style={{color: '#ffffff'}}>Сумма *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1531,7 +1533,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Дата *</label>
+                  <label style={{color: '#ffffff'}}>Дата *</label>
                   <input
                     type="date"
                     value={formData.transaction_date || ''}
@@ -1539,7 +1541,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Метод оплаты *</label>
+                  <label style={{color: '#ffffff'}}>Метод оплаты *</label>
                   <select
                     value={formData.payment_method || 'cash'}
                     onChange={(e) => setFormData({...formData, payment_method: e.target.value})}
@@ -1551,7 +1553,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                     <option value="other">Другое</option>
                   </select>
 
-                  <label>Описание</label>
+                  <label style={{color: '#ffffff'}}>Описание</label>
                   <textarea
                     value={formData.description || ''}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
@@ -1562,35 +1564,25 @@ const downloadInvoicePdf = async (invoiceId) => {
 
               {modalType === 'user' && (
                 <>
-                  <label>Логин *</label>
+                  <label style={{color: '#ffffff'}}>Логин *</label>
                   <input
                     type="text"
                     value={formData.username || ''}
                     onChange={(e) => setFormData({...formData, username: e.target.value})}
                     required
                     disabled={formData.id ? true : false}
+                    style={{ WebkitTextFillColor: 'white' }}
                   />
 
-                  {!formData.id && (
-                    <>
-                      <label>Пароль *</label>
-                      <input
-                        type="password"
-                        value={formData.password || ''}
-                        onChange={(e) => setFormData({...formData, password: e.target.value})}
-                        required
-                      />
-                    </>
-                  )}
 
-                  <label>Email</label>
+                  <label style={{color: '#ffffff'}}>Email</label>
                   <input
                     type="email"
                     value={formData.email || ''}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                   />
 
-                  <label>Полное имя *</label>
+                  <label style={{color: '#ffffff'}}>Полное имя *</label>
                   <input
                     type="text"
                     value={formData.full_name || ''}
@@ -1598,14 +1590,14 @@ const downloadInvoicePdf = async (invoiceId) => {
                     required
                   />
 
-                  <label>Телефон</label>
+                  <label style={{color: '#ffffff'}}>Телефон</label>
                   <input
                     type="text"
                     value={formData.phone || ''}
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   />
 
-                  <label>Роль *</label>
+                  <label style={{color: '#ffffff'}}>Роль *</label>
                   <select
                     value={formData.role || 'client'}
                     onChange={(e) => setFormData({...formData, role: e.target.value})}

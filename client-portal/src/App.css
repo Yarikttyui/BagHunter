@@ -538,7 +538,6 @@
 .modal-close-btn:hover {
   background: rgba(220, 53, 69, 0.2);
   border-color: rgba(220, 53, 69, 0.5);
-  transform: rotate(90deg);
 }
 
 .invoice-form {
@@ -742,6 +741,12 @@
   border-color: rgba(102, 126, 234, 0.5);
   background: rgba(255, 255, 255, 0.08);
   box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.item-col-product select option {
+  background-color: #1a1a2e;
+  color: #ffffff;
+  padding: 8px;
 }
 
 .item-total-display {

@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import './Home.css';
 import { CLIENT_PORTAL_URL } from '../config/api';
 
 const Home = () => {
-  const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState(0);
 
   const categories = [
