@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS invoice_logs (
 INSERT INTO clients (company_name, contact_person, email, phone, address, inn, status) VALUES
 ('ООО "Логистик Про"', 'Иванов Иван Иванович', 'info@logisticpro.ru', '+7-495-123-4567', 'Москва, ул. Тверская, д. 10', '7701234567', 'active'),
 ('АО "Транспорт Сервис"', 'Петров Пётр Петрович', 'contact@transserv.ru', '+7-812-987-6543', 'Санкт-Петербург, пр. Невский, д. 25', '7802345678', 'active'),
-('ИП Сидоров С.С.', 'Сидоров Сергей Сергеевич', 'sidorov@mail.ru', '+7-916-555-1234', 'Московская обл., г. Химки', '771234567890', 'active'),
+('ИП Сидоров С.С.', 'Сидоров Сергей Сергеевич', 'sidorov@mail.ru', '+7-916-555-1234', 'Московская обл., г. Химки', '77YarikTop1290', 'active'),
 ('ООО "Глобал Логистикс"', 'Кузнецов Андрей Петрович', 'info@globallog.ru', '+7-495-777-8899', 'Москва, ул. Арбат, д. 20', '7703456789', 'active'),
 ('ЗАО "СтройМаркет"', 'Волков Дмитрий Александрович', 'dm.volkov@stroymarket.ru', '+7-495-234-5678', 'Москва, ул. Ленина, д. 45', '7704567890', 'active'),
 ('ООО "ТехноТорг"', 'Морозова Елена Викторовна', 'info@technotorg.ru', '+7-812-345-6789', 'Санкт-Петербург, ул. Садовая, д. 12', '7805678901', 'active'),
@@ -245,7 +245,7 @@ INSERT INTO comments (invoice_id, user_id, comment_text, is_internal) VALUES
 (4, 2, 'Экспресс-курьер назначен на маршрут D15.', TRUE),
 (4, 7, 'Оплату проведём сегодня.', FALSE);
 
-INSERT INTO notificationsINSERT INTO notifications (user_id, title, message, type, invoice_id, is_read) VALUES
+-- INSERT INTO notifications (user_id, title, message, type, invoice_id, is_read) VALUES
 /*(4, 'РќРѕРІР°СЏ РЅР°РєР»Р°РґРЅР°СЏ', 'РЎРѕР·РґР°РЅР° РЅР°РєР»Р°РґРЅР°СЏ INV-170584168125 РЅР° СЃСѓРјРјСѓ 50000.00в‚Ѕ', 'invoice_created', 1, TRUE),
 (5, 'РўРѕРІР°СЂ РІ РїСѓС‚Рё', 'РќР°РєР»Р°РґРЅР°СЏ INV-170585816894 РѕС‚РїСЂР°РІР»РµРЅР° РЅР° РґРѕСЃС‚Р°РІРєСѓ', 'invoice_shipped', 2, FALSE),
 (6, 'Р”РѕСЃС‚Р°РІРєР° Р·Р°РІРµСЂС€РµРЅР°', 'РќР°РєР»Р°РґРЅР°СЏ INV-170583485936 СѓСЃРїРµС€РЅРѕ РґРѕСЃС‚Р°РІР»РµРЅР°', 'invoice_delivered', 3, TRUE),
