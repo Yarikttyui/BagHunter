@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { requireRole } = require('../middleware/auth');
+
+router.use(requireRole('admin', 'accountant'));
 
 router.get('/income-expense-chart', async (req, res) => {
   try {
@@ -231,263 +234,13 @@ router.get('/dashboard', async (req, res) => {
         AND (? IS NULL OR i.invoice_date <= ?)
     `, [start_date, start_date, end_date, end_date]);
     
-    const [transport] = await db.query(`
-      SELECT 
-        COUNT(DISTINCT v.id) as total_vehicles,
-        COUNT(DISTINCT CASE WHEN v.status = 'available' THEN v.id END) as available_vehicles,
-        COUNT(DISTINCT d.id) as total_drivers,
-        COUNT(DISTINCT CASE WHEN d.status = 'available' THEN d.id END) as available_drivers,
-        COUNT(DISTINCT w.id) as total_waybills,
-        COUNT(DISTINCT CASE WHEN w.status = 'completed' THEN w.id END) as completed_waybills
-      FROM vehicles v
-      CROSS JOIN drivers d
-      LEFT JOIN waybills w ON (? IS NULL OR w.departure_date >= ?)
-        AND (? IS NULL OR w.departure_date <= ?)
-    `, [start_date, start_date, end_date, end_date]);
-    
-    const [warehouse] = await db.query(`
-      SELECT 
-        COUNT(DISTINCT p.id) as total_products,
-        COUNT(DISTINCT CASE WHEN p.status = 'active' THEN p.id END) as active_products,
-        COALESCE(SUM(s.quantity), 0) as total_stock,
-        COALESCE(SUM(s.quantity * p.price), 0) as stock_value,
-        COUNT(DISTINCT CASE WHEN (s.quantity - s.reserved_quantity) < p.min_stock THEN p.id END) as low_stock_count
-      FROM products p
-      LEFT JOIN stock s ON p.id = s.product_id
-    `);
-    
     res.json({
       finance: finance[0],
-      clients: clients[0],
-      transport: transport[0],
-      warehouse: warehouse[0]
+      clients: clients[0]
     });
   } catch (error) {
     console.error('Ошибка получения дашборда:', error);
     res.status(500).json({ error: 'Ошибка получения статистики' });
-  }
-});
-
-
-router.get('/drivers', async (req, res) => {
-  try {
-    const { start_date, end_date, driver_id } = req.query;
-    
-    let query = `
-      SELECT 
-        d.id,
-        d.full_name,
-        d.license_number,
-        d.status,
-        COUNT(DISTINCT w.id) as total_trips,
-        COUNT(DISTINCT CASE WHEN w.status = 'completed' THEN w.id END) as completed_trips,
-        COUNT(DISTINCT CASE WHEN w.status = 'in_progress' THEN w.id END) as active_trips,
-        COALESCE(SUM(CASE WHEN w.status = 'completed' THEN w.distance_km END), 0) as total_distance,
-        COALESCE(SUM(CASE WHEN w.status = 'completed' THEN w.fuel_consumed END), 0) as total_fuel,
-        COALESCE(AVG(CASE WHEN w.status = 'completed' THEN w.distance_km END), 0) as avg_distance,
-        COALESCE(SUM(CASE WHEN w.status = 'completed' THEN i.total_amount END), 0) as total_revenue,
-        COUNT(DISTINCT w.vehicle_id) as vehicles_used,
-        MIN(w.departure_date) as first_trip,
-        MAX(w.arrival_date) as last_trip
-      FROM drivers d
-      LEFT JOIN waybills w ON d.id = w.driver_id
-        AND (? IS NULL OR w.departure_date >= ?)
-        AND (? IS NULL OR w.departure_date <= ?)
-      LEFT JOIN invoices i ON w.invoice_id = i.id
-      WHERE 1=1
-    `;
-    const params = [start_date, start_date, end_date, end_date];
-    
-    if (driver_id) {
-      query += ' AND d.id = ?';
-      params.push(driver_id);
-    }
-    
-    query += ' GROUP BY d.id ORDER BY completed_trips DESC';
-    
-    const [drivers] = await db.query(query, params);
-    res.json(drivers);
-  } catch (error) {
-    console.error('Ошибка аналитики водителей:', error);
-    res.status(500).json({ error: 'Ошибка получения аналитики' });
-  }
-});
-
-router.get('/drivers/ranking', async (req, res) => {
-  try {
-    const { metric = 'trips', limit = 10 } = req.query;
-    
-    let orderBy = 'completed_trips DESC';
-    if (metric === 'distance') orderBy = 'total_distance DESC';
-    if (metric === 'revenue') orderBy = 'total_revenue DESC';
-    if (metric === 'efficiency') orderBy = '(total_distance / NULLIF(total_fuel, 0)) DESC';
-    
-    const [ranking] = await db.query(`
-      SELECT 
-        d.id,
-        d.full_name,
-        d.phone,
-        COUNT(DISTINCT CASE WHEN w.status = 'completed' THEN w.id END) as completed_trips,
-        COALESCE(SUM(CASE WHEN w.status = 'completed' THEN w.distance_km END), 0) as total_distance,
-        COALESCE(SUM(CASE WHEN w.status = 'completed' THEN w.fuel_consumed END), 0) as total_fuel,
-        COALESCE(SUM(CASE WHEN w.status = 'completed' THEN i.total_amount END), 0) as total_revenue,
-        ROUND(COALESCE(SUM(CASE WHEN w.status = 'completed' THEN w.distance_km END), 0) / 
-              NULLIF(SUM(CASE WHEN w.status = 'completed' THEN w.fuel_consumed END), 0), 2) as fuel_efficiency
-      FROM drivers d
-      LEFT JOIN waybills w ON d.id = w.driver_id
-      LEFT JOIN invoices i ON w.invoice_id = i.id
-      WHERE d.status = 'available'
-      GROUP BY d.id
-      ORDER BY ${orderBy}
-      LIMIT ?
-    `, [parseInt(limit)]);
-    
-    res.json(ranking);
-  } catch (error) {
-    console.error('Ошибка рейтинга водителей:', error);
-    res.status(500).json({ error: 'Ошибка получения рейтинга' });
-  }
-});
-
-
-router.get('/vehicles', async (req, res) => {
-  try {
-    const { start_date, end_date, vehicle_id } = req.query;
-    
-    let query = `
-      SELECT 
-        v.id,
-        v.vehicle_number,
-        v.model,
-        v.status,
-        COUNT(DISTINCT w.id) as total_trips,
-        COUNT(DISTINCT CASE WHEN w.status = 'completed' THEN w.id END) as completed_trips,
-        COALESCE(SUM(CASE WHEN w.status = 'completed' THEN w.distance_km END), 0) as total_distance,
-        COALESCE(SUM(CASE WHEN w.status = 'completed' THEN w.fuel_consumed END), 0) as total_fuel,
-        ROUND(COALESCE(SUM(CASE WHEN w.status = 'completed' THEN w.distance_km END), 0) / 
-              NULLIF(SUM(CASE WHEN w.status = 'completed' THEN w.fuel_consumed END), 0), 2) as fuel_efficiency,
-        COALESCE(SUM(CASE WHEN w.status = 'completed' THEN i.total_amount END), 0) as total_revenue,
-        COUNT(DISTINCT w.driver_id) as drivers_used,
-        DATEDIFF(CURDATE(), v.last_maintenance_date) as days_since_maintenance
-      FROM vehicles v
-      LEFT JOIN waybills w ON v.id = w.vehicle_id
-        AND (? IS NULL OR w.departure_date >= ?)
-        AND (? IS NULL OR w.departure_date <= ?)
-      LEFT JOIN invoices i ON w.invoice_id = i.id
-      WHERE 1=1
-    `;
-    const params = [start_date, start_date, end_date, end_date];
-    
-    if (vehicle_id) {
-      query += ' AND v.id = ?';
-      params.push(vehicle_id);
-    }
-    
-    query += ' GROUP BY v.id ORDER BY completed_trips DESC';
-    
-    const [vehicles] = await db.query(query, params);
-    res.json(vehicles);
-  } catch (error) {
-    console.error('Ошибка аналитики транспорта:', error);
-    res.status(500).json({ error: 'Ошибка получения аналитики' });
-  }
-});
-
-router.get('/vehicles/high-mileage', async (req, res) => {
-  try {
-    const { limit = 10 } = req.query;
-    
-    const [vehicles] = await db.query(`
-      SELECT 
-        v.*,
-        COALESCE(SUM(w.distance_km), 0) as total_distance,
-        COUNT(DISTINCT w.id) as trips_count,
-        DATEDIFF(CURDATE(), v.last_maintenance_date) as days_since_maintenance
-      FROM vehicles v
-      LEFT JOIN waybills w ON v.id = w.vehicle_id AND w.status = 'completed'
-      GROUP BY v.id
-      HAVING days_since_maintenance > 90 OR total_distance > 10000
-      ORDER BY total_distance DESC
-      LIMIT ?
-    `, [parseInt(limit)]);
-    
-    res.json(vehicles);
-  } catch (error) {
-    console.error('Ошибка получения транспорта:', error);
-    res.status(500).json({ error: 'Ошибка получения данных' });
-  }
-});
-
-
-router.get('/warehouse/movements', async (req, res) => {
-  try {
-    const { start_date, end_date, product_id } = req.query;
-    
-    let query = `
-      SELECT 
-        p.id,
-        p.name,
-        p.sku,
-        c.name as category_name,
-        COUNT(DISTINCT m.id) as total_movements,
-        COALESCE(SUM(CASE WHEN m.movement_type IN ('in', 'adjustment') THEN m.quantity ELSE 0 END), 0) as total_in,
-        COALESCE(SUM(CASE WHEN m.movement_type IN ('out', 'reserved') THEN m.quantity ELSE 0 END), 0) as total_out,
-        COALESCE(SUM(s.quantity), 0) as current_stock,
-        COALESCE(SUM(s.reserved_quantity), 0) as reserved_stock
-      FROM products p
-      LEFT JOIN product_categories c ON p.category_id = c.id
-      LEFT JOIN stock_movements m ON p.id = m.product_id
-        AND (? IS NULL OR m.created_at >= ?)
-        AND (? IS NULL OR m.created_at <= ?)
-      LEFT JOIN stock s ON p.id = s.product_id
-      WHERE 1=1
-    `;
-    const params = [start_date, start_date, end_date, end_date];
-    
-    if (product_id) {
-      query += ' AND p.id = ?';
-      params.push(product_id);
-    }
-    
-    query += ' GROUP BY p.id ORDER BY total_movements DESC';
-    
-    const [movements] = await db.query(query, params);
-    res.json(movements);
-  } catch (error) {
-    console.error('Ошибка аналитики движений:', error);
-    res.status(500).json({ error: 'Ошибка получения аналитики' });
-  }
-});
-
-router.get('/warehouse/popular', async (req, res) => {
-  try {
-    const { limit = 10, start_date, end_date } = req.query;
-    
-    const [popular] = await db.query(`
-      SELECT 
-        p.id,
-        p.name,
-        p.sku,
-        p.price,
-        c.name as category_name,
-        COUNT(DISTINCT ii.invoice_id) as orders_count,
-        COALESCE(SUM(ii.quantity), 0) as total_sold,
-        COALESCE(SUM(ii.quantity * ii.unit_price), 0) as total_revenue
-      FROM products p
-      LEFT JOIN product_categories c ON p.category_id = c.id
-      INNER JOIN invoice_items ii ON p.id = ii.product_id
-      INNER JOIN invoices i ON ii.invoice_id = i.id
-      WHERE (? IS NULL OR i.invoice_date >= ?)
-        AND (? IS NULL OR i.invoice_date <= ?)
-      GROUP BY p.id
-      ORDER BY total_sold DESC
-      LIMIT ?
-    `, [start_date, start_date, end_date, end_date, parseInt(limit)]);
-    
-    res.json(popular);
-  } catch (error) {
-    console.error('Ошибка получения популярных товаров:', error);
-    res.status(500).json({ error: 'Ошибка получения данных' });
   }
 });
 
@@ -515,34 +268,6 @@ router.get('/trends/sales', async (req, res) => {
     res.status(500).json({ error: 'Ошибка получения данных' });
   }
 });
-
-router.get('/trends/transport', async (req, res) => {
-  try {
-    const { months = 12 } = req.query;
-    
-    const [trends] = await db.query(`
-      SELECT 
-        DATE_FORMAT(w.departure_date, '%Y-%m') as month,
-        COUNT(DISTINCT w.id) as trips_count,
-        COUNT(DISTINCT w.vehicle_id) as vehicles_used,
-        COUNT(DISTINCT w.driver_id) as drivers_used,
-        COALESCE(SUM(w.distance_km), 0) as total_distance,
-        COALESCE(SUM(w.fuel_consumed), 0) as total_fuel,
-        ROUND(COALESCE(SUM(w.distance_km), 0) / NULLIF(SUM(w.fuel_consumed), 0), 2) as avg_efficiency
-      FROM waybills w
-      WHERE w.departure_date >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
-        AND w.status = 'completed'
-      GROUP BY month
-      ORDER BY month DESC
-    `, [parseInt(months)]);
-    
-    res.json(trends);
-  } catch (error) {
-    console.error('Ошибка трендов транспорта:', error);
-    res.status(500).json({ error: 'Ошибка получения данных' });
-  }
-});
-
 
 router.get('/clients/top', async (req, res) => {
   try {

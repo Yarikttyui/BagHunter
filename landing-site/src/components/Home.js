@@ -175,7 +175,7 @@ const Home = () => {
       </section>
 
       <footer className="footer">
-        <p>&copy; 2025 BAGXanter Logistics. Все права защищены.</p>
+        <p>&copy; 2025 BagHunter Logistics. Все права защищены.</p>
       </footer>
     </div>
   );

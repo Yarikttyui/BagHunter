@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import ColorBends from './ColorBends';
 import NotificationBell from './NotificationBell';
@@ -7,6 +7,38 @@ import Pagination from './Pagination';
 import SortableTable from './SortableTable';
 import AdminComments from './AdminComments';
 import { API_BASE_URL, ASSET_BASE_URL } from '../config/api';
+
+const STATUS_LABELS = {
+  pending: '\u041e\u0436\u0438\u0434\u0430\u0435\u0442',
+  in_transit: '\u0412 \u043f\u0443\u0442\u0438',
+  delivered: '\u0414\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e',
+  cancelled: '\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u043e'
+};
+
+const STATUS_DESCRIPTIONS = {
+  pending: '\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 \u043e\u0436\u0438\u0434\u0430\u0435\u0442 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0438 \u0441\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a\u043e\u043c \u0441\u043a\u043b\u0430\u0434\u0430',
+  in_transit: '\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u043f\u0435\u0440\u0435\u0434\u0430\u043d\u0430 \u0432 \u043b\u043e\u0433\u0438\u0441\u0442\u0438\u043a\u0443 \u0438 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u0441\u044f \u0432 \u043f\u0443\u0442\u0438',
+  delivered: '\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0430 \u0438 \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u0437\u0430\u043a\u0440\u044b\u0442\u0430',
+  cancelled: '\u041e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u0435 \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u043c \u0438\u043b\u0438 \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u043e\u043c'
+};
+
+const ACTION_LABELS = {
+  create: '\u0421\u043e\u0437\u0434\u0430\u043d\u0438\u0435',
+  created: '\u0421\u043e\u0437\u0434\u0430\u043d\u0438\u0435',
+  update: '\u041e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435',
+  updated: '\u041e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435',
+  delete: '\u0423\u0434\u0430\u043b\u0435\u043d\u0438\u0435',
+  deleted: '\u0423\u0434\u0430\u043b\u0435\u043d\u0438\u0435',
+  status_change: '\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u0441\u0442\u0430\u0442\u0443\u0441\u0430',
+  status_changed: '\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u0441\u0442\u0430\u0442\u0443\u0441\u0430'
+};
+
+const LOG_DEFAULT_DESCRIPTIONS = {
+  created: '\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u0441\u043e\u0437\u0434\u0430\u043d\u0430',
+  updated: '\u0414\u0430\u043d\u043d\u044b\u0435 \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u043e\u0439 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b'
+};
+
+const hasCyrillic = (value) => /[А-Яа-яЁё]/.test(value || '');
 
 const API_URL = API_BASE_URL;
 
@@ -25,6 +57,35 @@ function AdminDashboard({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [selectedInvoiceDetails, setSelectedInvoiceDetails] = useState(null);
   const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
+
+  const [clientsTotal, setClientsTotal] = useState(0);
+  const [invoicesTotal, setInvoicesTotal] = useState(0);
+  const [transactionsTotal, setTransactionsTotal] = useState(0);
+
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+
+  const handleApiError = useCallback(
+    (error, contextMessage) => {
+      const status = error?.response?.status;
+      if (status === 401) {
+        console.error('Auth middleware error:', error?.response?.data || error.message);
+        if (typeof onLogout === 'function') {
+          onLogout();
+        }
+        return true;
+      }
+
+      if (contextMessage) {
+        console.error(contextMessage, error);
+      } else {
+        console.error(error);
+      }
+      return false;
+    },
+    [onLogout]
+  );
 
   const [draggedTab, setDraggedTab] = useState(null);
   const [tabOrder, setTabOrder] = useState(() => {
@@ -46,6 +107,23 @@ function AdminDashboard({ user, onLogout }) {
   const [currentPageTransactions, setCurrentPageTransactions] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const normalizeDateField = useCallback(
+    (value) => {
+      if (!value) {
+        return today;
+      }
+
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return typeof value === 'string' ? value.slice(0, 10) : today;
+      }
+
+      return parsed.toISOString().split('T')[0];
+    },
+    [today]
+  );
+
   const isAdmin = user.role === 'admin';
   const isAccountant = user.role === 'accountant';
   
@@ -54,18 +132,11 @@ function AdminDashboard({ user, onLogout }) {
   const canDeleteTransactions = isAdmin;
   const canApproveInvoices = isAdmin || isAccountant;
 
-  useEffect(() => {
-    fetchData();
-  }, [activeTab]);
-
-  const fetchData = async () => {
+  const fetchInitialData = useCallback(async () => {
     setLoading(true);
     try {
       const requests = [
         axios.get(`${API_URL}/reports/stats`),
-        axios.get(`${API_URL}/clients`),
-        axios.get(`${API_URL}/invoices`),
-        axios.get(`${API_URL}/transactions`),
         axios.get(`${API_URL}/profiles/${user.id}`)
       ];
       
@@ -76,29 +147,245 @@ function AdminDashboard({ user, onLogout }) {
       
       const responses = await Promise.all(requests);
 
-      setStats(responses[0].data);
-      setClients(responses[1].data);
-      setInvoices(responses[2].data);
-      setTransactions(responses[3].data);
-      setUserProfile(responses[4].data);
+      setStats(responses[0]?.data ?? null);
+      setUserProfile(responses[1]?.data ?? null);
       
-      if (isAdmin && responses[5]) {
-        setUsers(responses[5].data);
-      }
-      
-      if (isAdmin && responses[6]) {
-        setInvoiceLogs(responses[6].data);
+      if (isAdmin) {
+        setUsers(responses[2]?.data ?? []);
+        setInvoiceLogs(responses[3]?.data ?? []);
       }
     } catch (error) {
+      if (handleApiError(error, 'Ошибка загрузки данных')) {
+        return;
+      }
       console.error('Ошибка загрузки данных:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_URL, isAdmin, user.id]);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
+
+  const normalizePaginated = useCallback((data) => {
+    if (Array.isArray(data)) {
+      return {
+        items: data,
+        total: data.length,
+        page: 1,
+        pageSize: data.length || itemsPerPage,
+        hasMore: false
+      };
+    }
+
+    const items = Array.isArray(data?.items) ? data.items : [];
+    return {
+      items,
+      total: typeof data?.total === 'number' ? data.total : items.length,
+      page: data?.page || 1,
+      pageSize: data?.pageSize || itemsPerPage,
+      hasMore: Boolean(data?.hasMore)
+    };
+  }, [itemsPerPage]);
+
+  const loadClients = useCallback(async () => {
+    try {
+      setClientsLoading(true);
+      const params = {
+        page: currentPageClients,
+        pageSize: itemsPerPage
+      };
+      if (searchTermClients.trim()) {
+        params.search = searchTermClients.trim();
+      }
+
+      const { data } = await axios.get(`${API_URL}/clients`, { params });
+      const payload = normalizePaginated(data);
+
+      const maxPage = Math.max(1, Math.ceil((payload.total || 0) / (payload.pageSize || itemsPerPage || 1)));
+      if (payload.total > 0 && payload.items.length === 0 && currentPageClients > maxPage) {
+        setCurrentPageClients(maxPage);
+        return;
+      }
+
+      setClients(payload.items);
+      setClientsTotal(payload.total);
+    } catch (error) {
+      if (handleApiError(error, 'Ошибка загрузки клиентов')) {
+        return;
+      }
+    } finally {
+      setClientsLoading(false);
+    }
+  }, [API_URL, currentPageClients, itemsPerPage, normalizePaginated, searchTermClients]);
+
+  const loadInvoices = useCallback(async () => {
+    try {
+      setInvoicesLoading(true);
+      const params = {
+        page: currentPageInvoices,
+        pageSize: itemsPerPage
+      };
+
+      if (searchTermInvoices.trim()) {
+        params.search = searchTermInvoices.trim();
+      }
+
+      if (filtersInvoices.status) {
+        params.status = filtersInvoices.status;
+      }
+
+      if (filtersInvoices.dateFrom) {
+        params.dateFrom = filtersInvoices.dateFrom;
+      }
+
+      if (filtersInvoices.dateTo) {
+        params.dateTo = filtersInvoices.dateTo;
+      }
+
+      if (filtersInvoices.minAmount) {
+        params.minAmount = filtersInvoices.minAmount;
+      }
+
+      if (filtersInvoices.maxAmount) {
+        params.maxAmount = filtersInvoices.maxAmount;
+      }
+
+      const { data } = await axios.get(`${API_URL}/invoices`, { params });
+      const payload = normalizePaginated(data);
+      const maxPage = Math.max(1, Math.ceil((payload.total || 0) / (payload.pageSize || itemsPerPage || 1)));
+
+      if (payload.total > 0 && payload.items.length === 0 && currentPageInvoices > maxPage) {
+        setCurrentPageInvoices(maxPage);
+        return;
+      }
+
+      setInvoices(payload.items);
+      setInvoicesTotal(payload.total);
+    } catch (error) {
+      if (handleApiError(error, 'Ошибка загрузки накладных')) {
+        return;
+      }
+    } finally {
+      setInvoicesLoading(false);
+    }
+  }, [
+    API_URL,
+    currentPageInvoices,
+    itemsPerPage,
+    normalizePaginated,
+    searchTermInvoices,
+    filtersInvoices
+  ]);
+
+  const loadTransactions = useCallback(async () => {
+    try {
+      setTransactionsLoading(true);
+      const params = {
+        page: currentPageTransactions,
+        pageSize: itemsPerPage
+      };
+
+      if (searchTermTransactions.trim()) {
+        params.search = searchTermTransactions.trim();
+      }
+
+      if (filtersTransactions.transactionType) {
+        params.transactionType = filtersTransactions.transactionType;
+      }
+
+      if (filtersTransactions.dateFrom) {
+        params.dateFrom = filtersTransactions.dateFrom;
+      }
+
+      if (filtersTransactions.dateTo) {
+        params.dateTo = filtersTransactions.dateTo;
+      }
+
+      if (filtersTransactions.minAmount) {
+        params.minAmount = filtersTransactions.minAmount;
+      }
+
+      if (filtersTransactions.maxAmount) {
+        params.maxAmount = filtersTransactions.maxAmount;
+      }
+
+      const { data } = await axios.get(`${API_URL}/transactions`, { params });
+      const payload = normalizePaginated(data);
+
+      const maxPage = Math.max(
+        1,
+        Math.ceil((payload.total || 0) / (payload.pageSize || itemsPerPage || 1))
+      );
+
+      if (payload.total > 0 && payload.items.length === 0 && currentPageTransactions > maxPage) {
+        setCurrentPageTransactions(maxPage);
+        return;
+      }
+
+      setTransactions(payload.items);
+      setTransactionsTotal(payload.total);
+    } catch (error) {
+      if (handleApiError(error, 'Ошибка загрузки транзакций')) {
+        return;
+      }
+    } finally {
+      setTransactionsLoading(false);
+    }
+  }, [
+    API_URL,
+    currentPageTransactions,
+    itemsPerPage,
+    normalizePaginated,
+    searchTermTransactions,
+    filtersTransactions
+  ]);
+
+  const refreshAllData = useCallback(() => {
+    fetchInitialData();
+    loadClients();
+    loadInvoices();
+    loadTransactions();
+  }, [fetchInitialData, loadClients, loadInvoices, loadTransactions]);
+
+  useEffect(() => {
+    loadClients();
+  }, [loadClients]);
+
+  useEffect(() => {
+    loadInvoices();
+  }, [loadInvoices]);
+
+  useEffect(() => {
+    loadTransactions();
+  }, [loadTransactions]);
 
   const openModal = (type, data = {}) => {
     setModalType(type);
-    setFormData(data);
+
+    if (type === 'invoice') {
+      if (data && data.id) {
+        setFormData({
+          ...data,
+          invoice_date: normalizeDateField(data.invoice_date),
+          delivery_date: normalizeDateField(data.delivery_date)
+        });
+      } else {
+        setFormData({
+          invoice_number: '',
+          client_id: '',
+          invoice_date: today,
+          delivery_date: today,
+          status: 'pending',
+          notes: '',
+          ...data
+        });
+      }
+    } else {
+      setFormData(data);
+    }
+
     setShowModal(true);
   };
 
@@ -118,13 +405,16 @@ function AdminDashboard({ user, onLogout }) {
           await axios.post(`${API_URL}/clients`, formData);
         }
       } else if (modalType === 'invoice') {
+        const invoicePayload = {
+          ...formData,
+          invoice_date: formData.id ? (formData.invoice_date || today) : today,
+          user_id: user.id
+        };
+
         if (formData.id) {
-          await axios.put(`${API_URL}/invoices/${formData.id}`, {
-            ...formData,
-            user_id: user.id
-          });
+          await axios.put(`${API_URL}/invoices/${formData.id}`, invoicePayload);
         } else {
-          await axios.post(`${API_URL}/invoices`, formData);
+          await axios.post(`${API_URL}/invoices`, invoicePayload);
         }
       } else if (modalType === 'transaction') {
         await axios.post(`${API_URL}/transactions`, formData);
@@ -137,7 +427,7 @@ function AdminDashboard({ user, onLogout }) {
       }
       
       closeModal();
-      fetchData();
+      refreshAllData();
     } catch (error) {
       console.error('Ошибка сохранения:', error);
       alert('Ошибка при сохранении данных');
@@ -149,7 +439,7 @@ function AdminDashboard({ user, onLogout }) {
     
     try {
       await axios.delete(`${API_URL}/${type}/${id}`);
-      fetchData();
+      refreshAllData();
     } catch (error) {
       console.error('Ошибка удаления:', error);
     }
@@ -160,7 +450,7 @@ function AdminDashboard({ user, onLogout }) {
     
     try {
       await axios.delete(`${API_URL}/users/${userId}`);
-      fetchData();
+      refreshAllData();
     } catch (error) {
       console.error('Ошибка удаления пользователя:', error);
       alert('Ошибка при удалении пользователя');
@@ -169,7 +459,7 @@ function AdminDashboard({ user, onLogout }) {
 
   const downloadFileWithToken = async (url, filename, errorMessage) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('admin_token');
       const response = await axios.get(url, {
         responseType: 'blob',
         headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -223,7 +513,7 @@ const downloadInvoicePdf = async (invoiceId) => {
         user_id: user.id
       });
       
-      fetchData();
+      refreshAllData();
       alert(`Накладная ${newStatus === 'in_transit' ? 'одобрена и отправлена' : newStatus === 'delivered' ? 'помечена как доставленная' : 'отклонена'}`);
     } catch (error) {
       console.error('Ошибка обновления статуса:', error);
@@ -259,15 +549,54 @@ const downloadInvoicePdf = async (invoiceId) => {
     return new Date(dateString).toLocaleDateString('ru-RU');
   };
 
-  const getStatusText = (status) => {
-    const statuses = {
-      pending: 'Ожидает',
-      in_transit: 'В пути',
-      delivered: 'Доставлено',
-      cancelled: 'Отменено'
-    };
-    return statuses[status] || status;
-  };
+  const getStatusText = useCallback(
+    (status) => STATUS_LABELS[status] || status,
+    []
+  );
+
+  const getStatusChangeText = useCallback(
+    (fromStatus, toStatus) => {
+      const fromText = STATUS_DESCRIPTIONS[fromStatus] || STATUS_LABELS[fromStatus] || fromStatus || '-';
+      const toText = STATUS_DESCRIPTIONS[toStatus] || STATUS_LABELS[toStatus] || toStatus || '-';
+      return `Статус изменён с "${fromText}" на "${toText}"`;
+    },
+    []
+  );
+
+  const getActionLabel = useCallback(
+    (action) => ACTION_LABELS[action] || ACTION_LABELS[action?.toLowerCase?.()] || action,
+    []
+  );
+
+  const formatLogDescription = useCallback(
+    (log) => {
+      if (!log) {
+        return '';
+      }
+
+      const raw = log.description || '';
+      const actionKey = log.action;
+
+      if (actionKey === 'status_change' || actionKey === 'status_changed') {
+        return getStatusChangeText(log.old_status, log.new_status);
+      }
+
+      if (actionKey === 'create' || actionKey === 'created') {
+        return LOG_DEFAULT_DESCRIPTIONS.created;
+      }
+
+      if (actionKey === 'update' || actionKey === 'updated') {
+        return LOG_DEFAULT_DESCRIPTIONS.updated;
+      }
+
+      if (hasCyrillic(raw)) {
+        return raw;
+      }
+
+      return raw ? 'Данные лога недоступны' : '';
+    },
+    [getStatusChangeText]
+  );
 
   const getPaymentMethodText = (method) => {
     const methods = {
@@ -280,80 +609,12 @@ const downloadInvoicePdf = async (invoiceId) => {
   };
 
   
-  const filteredClients = useMemo(() => {
-    return clients.filter(client => {
-      const searchLower = searchTermClients.toLowerCase();
-      return (
-        client.company_name?.toLowerCase().includes(searchLower) ||
-        client.email?.toLowerCase().includes(searchLower) ||
-        client.phone?.includes(searchTermClients) ||
-        client.inn?.includes(searchTermClients) ||
-        client.address?.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [clients, searchTermClients]);
+  const filteredClients = useMemo(() => clients, [clients]);
 
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter(invoice => {
-      const searchLower = searchTermInvoices.toLowerCase();
-      const matchesSearch = 
-        invoice.invoice_number?.toLowerCase().includes(searchLower) ||
-        invoice.client_name?.toLowerCase().includes(searchLower);
+  const filteredInvoices = useMemo(() => invoices, [invoices]);
 
-      if (!matchesSearch) return false;
+  const filteredTransactions = useMemo(() => transactions, [transactions]);
 
-      if (filtersInvoices.status && invoice.status !== filtersInvoices.status) return false;
-      
-      if (filtersInvoices.dateFrom) {
-        const invoiceDate = new Date(invoice.invoice_date);
-        const filterDate = new Date(filtersInvoices.dateFrom);
-        if (invoiceDate < filterDate) return false;
-      }
-
-      if (filtersInvoices.dateTo) {
-        const invoiceDate = new Date(invoice.invoice_date);
-        const filterDate = new Date(filtersInvoices.dateTo);
-        if (invoiceDate > filterDate) return false;
-      }
-
-      if (filtersInvoices.minAmount && invoice.total_amount < Number(filtersInvoices.minAmount)) return false;
-      if (filtersInvoices.maxAmount && invoice.total_amount > Number(filtersInvoices.maxAmount)) return false;
-
-      return true;
-    });
-  }, [invoices, searchTermInvoices, filtersInvoices]);
-
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(transaction => {
-      const searchLower = searchTermTransactions.toLowerCase();
-      const matchesSearch = 
-        transaction.description?.toLowerCase().includes(searchLower) ||
-        transaction.payment_method?.toLowerCase().includes(searchLower);
-
-      if (!matchesSearch) return false;
-
-      if (filtersTransactions.transactionType && transaction.transaction_type !== filtersTransactions.transactionType) return false;
-      
-      if (filtersTransactions.dateFrom) {
-        const transDate = new Date(transaction.transaction_date);
-        const filterDate = new Date(filtersTransactions.dateFrom);
-        if (transDate < filterDate) return false;
-      }
-
-      if (filtersTransactions.dateTo) {
-        const transDate = new Date(transaction.transaction_date);
-        const filterDate = new Date(filtersTransactions.dateTo);
-        if (transDate > filterDate) return false;
-      }
-
-      if (filtersTransactions.minAmount && transaction.amount < Number(filtersTransactions.minAmount)) return false;
-      if (filtersTransactions.maxAmount && transaction.amount > Number(filtersTransactions.maxAmount)) return false;
-
-      return true;
-    });
-  }, [transactions, searchTermTransactions, filtersTransactions]);
-
-  
   const sortData = (data, column, direction) => {
     if (!column) return data;
 
@@ -382,13 +643,6 @@ const downloadInvoicePdf = async (invoiceId) => {
       if (aVal > bVal) return direction === 'asc' ? 1 : -1;
       return 0;
     });
-  };
-
-  
-  const paginateData = (data, currentPage, perPage) => {
-    const startIndex = (currentPage - 1) * perPage;
-    const endIndex = startIndex + perPage;
-    return data.slice(startIndex, endIndex);
   };
 
   const defaultTabs = [
@@ -446,10 +700,6 @@ const downloadInvoicePdf = async (invoiceId) => {
   const sortedClients = sortData(filteredClients, sortColumn, sortDirection);
   const sortedInvoices = sortData(filteredInvoices, sortColumn, sortDirection);
   const sortedTransactions = sortData(filteredTransactions, sortColumn, sortDirection);
-
-  const paginatedClients = paginateData(sortedClients, currentPageClients, itemsPerPage);
-  const paginatedInvoices = paginateData(sortedInvoices, currentPageInvoices, itemsPerPage);
-  const paginatedTransactions = paginateData(sortedTransactions, currentPageTransactions, itemsPerPage);
 
   const handleSort = (column, direction) => {
     setSortColumn(column);
@@ -584,32 +834,38 @@ const downloadInvoicePdf = async (invoiceId) => {
 
             <h2 className="section-title" style={{marginTop: '40px'}}>Последние накладные</h2>
             <div className="table-wrapper table-wrapper--dashboard">
-              <table className="glass-table glass-table--compact">
-                <thead>
-                  <tr>
-                    <th>№</th>
-                    <th>Клиент</th>
-                    <th>Дата</th>
-                    <th>Сумма</th>
-                    <th>Статус</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.slice(0, 5).map(invoice => (
-                    <tr key={invoice.id}>
-                      <td>{invoice.invoice_number}</td>
-                      <td>{invoice.client_name}</td>
-                      <td>{formatDate(invoice.invoice_date)}</td>
-                      <td>{formatCurrency(invoice.total_amount)}</td>
-                      <td>
-                        <span className={`status-badge status-${invoice.status}`}>
-                          {getStatusText(invoice.status)}
-                        </span>
-                      </td>
+              {invoicesLoading ? (
+                <div className="table-empty">Загрузка...</div>
+              ) : sortedInvoices.length === 0 ? (
+                <div className="table-empty">Данные отсутствуют</div>
+              ) : (
+                <table className="glass-table glass-table--compact">
+                  <thead>
+                    <tr>
+                      <th>№</th>
+                      <th>Клиент</th>
+                      <th>Дата</th>
+                      <th>Сумма</th>
+                      <th>Статус</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {sortedInvoices.slice(0, 5).map((invoice) => (
+                      <tr key={invoice.id}>
+                        <td>{invoice.invoice_number}</td>
+                        <td>{invoice.client_name}</td>
+                        <td>{formatDate(invoice.invoice_date)}</td>
+                        <td>{formatCurrency(invoice.total_amount)}</td>
+                        <td>
+                          <span className={`status-badge status-${invoice.status}`}>
+                            {getStatusText(invoice.status)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
@@ -664,7 +920,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                   )
                 }
               ]}
-              data={paginatedClients}
+              data={sortedClients}
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={handleSort}
@@ -789,7 +1045,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                   )
                 }
               ]}
-              data={paginatedInvoices}
+              data={sortedInvoices}
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={handleSort}
@@ -886,7 +1142,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                   )
                 }
               ]}
-              data={paginatedTransactions}
+              data={sortedTransactions}
               sortColumn={sortColumn}
               sortDirection={sortDirection}
               onSort={handleSort}
@@ -1089,7 +1345,9 @@ const downloadInvoicePdf = async (invoiceId) => {
             </div>
 
             <div className="logs-list">
-              {invoiceLogs.map(log => (
+              {invoiceLogs.map(log => {
+                const description = formatLogDescription(log);
+                return (
                 <div key={log.id} className="log-card">
                   <div className="log-card-header">
                     <div className="log-main-info">
@@ -1101,11 +1359,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                       </div>
                     </div>
                     <div className="log-action-badge">
-                      {log.action === 'created' ? 'Создание' :
-                       log.action === 'updated' ? 'Обновление' :
-                       log.action === 'deleted' ? 'Удаление' :
-                       log.action === 'status_changed' ? 'Изменение статуса' :
-                       log.action}
+                      {getActionLabel(log.action)}
                     </div>
                   </div>
 
@@ -1137,11 +1391,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                         <div className="status-item">
                           <span className="status-label">Старый статус:</span>
                           <span className={`status-badge status-${log.old_status}`}>
-                            {log.old_status === 'pending' ? 'Ожидает' :
-                             log.old_status === 'in_transit' ? 'В пути' :
-                             log.old_status === 'delivered' ? 'Доставлено' :
-                             log.old_status === 'cancelled' ? 'Отменено' :
-                             log.old_status}
+                            {getStatusText(log.old_status)}
                           </span>
                         </div>
                       )}
@@ -1150,24 +1400,21 @@ const downloadInvoicePdf = async (invoiceId) => {
                         <div className="status-item">
                           <span className="status-label">Новый статус:</span>
                           <span className={`status-badge status-${log.new_status}`}>
-                            {log.new_status === 'pending' ? 'Ожидает' :
-                             log.new_status === 'in_transit' ? 'В пути' :
-                             log.new_status === 'delivered' ? 'Доставлено' :
-                             log.new_status === 'cancelled' ? 'Отменено' :
-                             log.new_status}
+                            {getStatusText(log.new_status)}
                           </span>
                         </div>
                       )}
                     </div>
 
-                    {log.description && (
+                    {description && (
                       <div className="log-description">
-                        {log.description}
+                        {description}
                       </div>
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -1205,7 +1452,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                           await axios.post(`${API_URL}/profiles/${user.id}/avatar`, formData, {
                             headers: { 'Content-Type': 'multipart/form-data' }
                           });
-                          fetchData();
+                          fetchInitialData();
                         } catch (error) {
                           alert('Ошибка загрузки аватара');
                         }
@@ -1336,16 +1583,21 @@ const downloadInvoicePdf = async (invoiceId) => {
                   <label style={{color: '#ffffff'}}>Дата накладной *</label>
                   <input
                     type="date"
-                    value={formData.invoice_date || ''}
-                    onChange={(e) => setFormData({...formData, invoice_date: e.target.value})}
+                    value={formData.invoice_date || today}
+                    onChange={() => {}}
+                    readOnly
+                    min={today}
+                    max={today}
                     required
                   />
 
-                  <label style={{color: '#ffffff'}}>Дата доставки</label>
+                  <label style={{color: '#ffffff'}}>Дата доставки *</label>
                   <input
                     type="date"
                     value={formData.delivery_date || ''}
                     onChange={(e) => setFormData({...formData, delivery_date: e.target.value})}
+                    required
+                    aria-required="true"
                   />
 
                   <label style={{color: '#ffffff'}}>Статус *</label>

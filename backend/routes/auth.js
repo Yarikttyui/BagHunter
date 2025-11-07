@@ -54,6 +54,10 @@ router.post('/register', async (req, res) => {
       company_address
     } = req.body;
 
+    if (company_inn && !/^\d{10}(\d{2})?$/.test(company_inn)) {
+      return res.status(400).json({ error: 'INN должен содержать 10 или 12 цифр' });
+    }
+
     if (!username || !email || !password || !full_name || !phone) {
       return res.status(400).json({ error: 'Username, email, password, full name and phone are required' });
     }
@@ -93,8 +97,8 @@ router.post('/register', async (req, res) => {
     const [userResult] = await db.query(
       `INSERT INTO users
        (username, email, password, recovery_code, role, full_name, phone,
-        company_name, company_inn, company_address, is_verified, client_id)
-       VALUES (?, ?, ?, ?, 'client', ?, ?, ?, ?, ?, TRUE, ?)`,
+        company_name, is_verified, client_id)
+       VALUES (?, ?, ?, ?, 'client', ?, ?, ?, TRUE, ?)`,
       [
         username,
         email,
@@ -103,8 +107,6 @@ router.post('/register', async (req, res) => {
         full_name,
         phone,
         company_name || null,
-        company_inn || null,
-        company_address || null,
         clientId
       ]
     );
@@ -112,7 +114,7 @@ router.post('/register', async (req, res) => {
     const newUserId = userResult.insertId;
     const [createdUsers] = await db.query(
       `SELECT id, username, email, role, client_id, full_name, phone,
-              company_name, company_inn, company_address, is_verified
+              company_name, is_verified
        FROM users
        WHERE id = ?`,
       [newUserId]
@@ -133,6 +135,9 @@ router.post('/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Client with the provided email already exists' });
+    }
     res.status(500).json({ error: 'Unable to register user right now' });
   }
 });

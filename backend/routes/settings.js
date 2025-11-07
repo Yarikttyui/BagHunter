@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { requireRole } = require('../middleware/auth');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -38,7 +39,7 @@ const upload = multer({
   fileFilter: fileFilter
 });
 
-router.post('/logo', upload.single('logo'), (req, res) => {
+router.post('/logo', requireRole('admin'), upload.single('logo'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Файл не загружен' });
@@ -75,7 +76,7 @@ router.get('/logo', (req, res) => {
   }
 });
 
-router.delete('/logo', (req, res) => {
+router.delete('/logo', requireRole('admin'), (req, res) => {
   try {
     const uploadDir = path.join(__dirname, '../uploads');
     const files = fs.readdirSync(uploadDir);
