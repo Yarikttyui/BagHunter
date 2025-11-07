@@ -19,6 +19,17 @@ const PALETTE = {
   tableStripe: '#f9fafb'
 };
 
+const DEFAULT_BRAND_LOGO = path.join(__dirname, '../assets/baghunter-logo.png');
+const COMPANY_LOGO = path.join(__dirname, '../uploads/company-logo.png');
+
+function resolveDejaVuFont(fontFile) {
+  try {
+    return require.resolve(`dejavu-fonts-ttf/ttf/${fontFile}`);
+  } catch (error) {
+    return null;
+  }
+}
+
 async function generateInvoicePDF(invoiceData, items = [], res) {
   try {
     const doc = new PDFDocument({
@@ -32,22 +43,20 @@ async function generateInvoicePDF(invoiceData, items = [], res) {
     });
 
     const fontsPath = path.join(__dirname, '../fonts');
-    let regularFont = path.join(fontsPath, 'DejaVuSans.ttf');
-    let boldFont = path.join(fontsPath, 'DejaVuSans-Bold.ttf');
+    const localRegular = path.join(fontsPath, 'DejaVuSans.ttf');
+    const localBold = path.join(fontsPath, 'DejaVuSans-Bold.ttf');
 
-    if (!fs.existsSync(regularFont) || !fs.existsSync(boldFont)) {
-      const fallbackPath = path.join(__dirname, '../node_modules/dejavu-fonts-ttf/ttf');
-      regularFont = path.join(fallbackPath, 'DejaVuSans.ttf');
-      boldFont = path.join(fallbackPath, 'DejaVuSans-Bold.ttf');
-    }
+    const resolvedRegular = fs.existsSync(localRegular) ? localRegular : resolveDejaVuFont('DejaVuSans.ttf');
+    const resolvedBold = fs.existsSync(localBold) ? localBold : resolveDejaVuFont('DejaVuSans-Bold.ttf');
 
-    const hasCustomFonts = fs.existsSync(regularFont) && fs.existsSync(boldFont);
-    const regularFontName = hasCustomFonts ? 'Regular' : 'Helvetica';
-    const boldFontName = hasCustomFonts ? 'Bold' : 'Helvetica-Bold';
+    let regularFontName = 'Helvetica';
+    let boldFontName = 'Helvetica-Bold';
 
-    if (hasCustomFonts) {
-      doc.registerFont('Regular', regularFont);
-      doc.registerFont('Bold', boldFont);
+    if (resolvedRegular && resolvedBold) {
+      doc.registerFont('Regular', resolvedRegular);
+      doc.registerFont('Bold', resolvedBold);
+      regularFontName = 'Regular';
+      boldFontName = 'Bold';
     }
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -57,13 +66,27 @@ async function generateInvoicePDF(invoiceData, items = [], res) {
     );
 
     doc.pipe(res);
-    doc.rect(0, 0, doc.page.width, doc.page.height).fill(PALETTE.background);
-    doc.font(regularFontName).fillColor(PALETTE.textPrimary);
 
     const margin = doc.page.margins.left;
+    const customLogoPath = fs.existsSync(COMPANY_LOGO) ? COMPANY_LOGO : null;
+    const brandLogoPath = fs.existsSync(DEFAULT_BRAND_LOGO) ? DEFAULT_BRAND_LOGO : null;
+    const headerLogoPath = customLogoPath || brandLogoPath;
+
+    const applyBaseBackground = () => {
+      doc.save();
+      doc.rect(0, 0, doc.page.width, doc.page.height).fill(PALETTE.background);
+      doc.restore();
+    };
+
+    applyBaseBackground();
+    doc.on('pageAdded', () => {
+      applyBaseBackground();
+      doc.font(regularFontName).fillColor(PALETTE.textPrimary);
+    });
+
+    doc.font(regularFontName).fillColor(PALETTE.textPrimary);
+
     const contentWidth = doc.page.width - margin * 2;
-    const logoPath = path.join(__dirname, '../uploads/company-logo.png');
-    const logoExists = fs.existsSync(logoPath);
 
     drawHeader(doc, {
       x: margin,
@@ -72,7 +95,7 @@ async function generateInvoicePDF(invoiceData, items = [], res) {
       invoice: invoiceData,
       fonts: { regular: regularFontName, bold: boldFontName },
       palette: PALETTE,
-      logoPath: logoExists ? logoPath : null
+      logoPath: headerLogoPath
     });
 
     let cursorY = margin + 120;
@@ -186,15 +209,20 @@ function drawHeader(doc, { x, y, width, invoice, fonts, palette, logoPath }) {
   doc.restore();
 
   if (logoPath) {
-    doc.image(logoPath, x + width - 150, y + 18, { width: 120, height: 36, fit: [120, 36] });
+    doc.image(logoPath, x + width - 140, y + 16, {
+      fit: [120, 48],
+      align: 'right'
+    });
   }
 
+  const titleWidth = logoPath ? width - 170 : width - 44;
+
   doc.font(fonts.bold).fontSize(24).fillColor(palette.textPrimary);
-  doc.text('ТОВАРНАЯ НАКЛАДНАЯ', x + 22, y + 20);
+  doc.text('ТОВАРНАЯ НАКЛАДНАЯ', x + 22, y + 24, { width: titleWidth });
 
   doc.font(fonts.regular).fontSize(12).fillColor(palette.textMuted);
-  doc.text(`№ ${invoice.invoice_number}`, x + 22, y + 58);
-  doc.text(`от ${formatDate(invoice.invoice_date)}`, x + 22, y + 74);
+  doc.text(`№ ${invoice.invoice_number}`, x + 22, y + 60);
+  doc.text(`от ${formatDate(invoice.invoice_date)}`, x + 22, y + 76);
 
   doc.font(fonts.bold)
     .fontSize(11)
@@ -300,7 +328,6 @@ function drawItemsTable(doc, { x, y, width, items, fonts, palette, margin }) {
   data.forEach((item, index) => {
     if (cursorY + rowHeight > doc.page.height - margin - 100) {
       doc.addPage();
-      doc.rect(0, 0, doc.page.width, doc.page.height).fill(PALETTE.background);
       doc.font(fonts.regular).fillColor(palette.textPrimary);
       cursorY = margin;
       drawHeader(cursorY);
@@ -410,7 +437,6 @@ function drawFooter(doc, { margin, width, fonts, palette }) {
 
 function addNotesPage(doc, { margin, width, fonts, palette }) {
   doc.addPage();
-  doc.rect(0, 0, doc.page.width, doc.page.height).fill(PALETTE.background);
   doc.font(fonts.bold).fontSize(18).fillColor(palette.textPrimary);
   doc.text('Замечания и дополнительные отметки', margin, margin);
 

@@ -22,7 +22,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
   }
 });
 
@@ -34,10 +35,11 @@ io.on('connection', (socket) => {
   console.log('[ws] client connected:', socket.id);
 
   socket.on('join_user_room', (userId) => {
-    if (!userId) {
+    const normalizedId = String(userId || '').trim();
+    if (!normalizedId) {
       return;
     }
-    const roomId = String(userId);
+    const roomId = `user_${normalizedId}`;
     socket.join(roomId);
     console.log(`[ws] client joined room ${roomId}`);
   });
@@ -64,7 +66,6 @@ const settingsRoutes = require('./routes/settings');
 const analyticsRoutes = require('./routes/analytics');
 const commentsRoutes = require('./routes/comments');
 const profilesRoutes = require('./routes/profiles');
-const trackingRoutes = require('./routes/tracking');
 const searchRoutes = require('./routes/search');
 const productsRoutes = require('./routes/products');
 
@@ -80,14 +81,8 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/comments', commentsRoutes);
 app.use('/api/profiles', profilesRoutes);
-app.use('/api/tracking', trackingRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/products', productsRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/comments', commentsRoutes);
-app.use('/api/profiles', profilesRoutes);
-app.use('/api/tracking', trackingRoutes);
-app.use('/api/search', searchRoutes);
 
 app.get('/', (req, res) => {
   res.json({ 

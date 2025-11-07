@@ -54,8 +54,8 @@ router.post('/register', async (req, res) => {
       company_address
     } = req.body;
 
-    if (company_inn && !/^\d+$/.test(company_inn)) {
-      return res.status(400).json({ error: 'INN must contain digits only' });
+    if (company_inn && !/^\d{10}(\d{2})?$/.test(company_inn)) {
+      return res.status(400).json({ error: 'INN должен содержать 10 или 12 цифр' });
     }
 
     if (!username || !email || !password || !full_name || !phone) {

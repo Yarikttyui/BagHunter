@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { requireRole } = require('../middleware/auth');
+
+router.use(requireRole('admin', 'accountant'));
 
 router.get('/income-expense-chart', async (req, res) => {
   try {

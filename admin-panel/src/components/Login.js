@@ -12,14 +12,25 @@ function Login({ onLogin }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const usernameRegex = /^[a-zA-Z0-9._-]{3,50}$/;
+  const isValidIdentifier = (value) => emailRegex.test(value) || usernameRegex.test(value);
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+
+    const normalizedUsername = username.trim();
+    if (!isValidIdentifier(normalizedUsername)) {
+      setError('Введите корректный email или логин (3-50 символов, без пробелов).');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const response = await axios.post(`${API_URL}/auth/login`, {
-        username,
+        username: normalizedUsername,
         password
       });
 
@@ -59,7 +70,7 @@ function Login({ onLogin }) {
       <div className="login-box">
         <div className="admin-badge">ADMIN</div>
         <h1>Административная панель</h1>
-        <p className="subtitle">Система учёта BAGXanter</p>
+        <p className="subtitle">Система учёта BagHunter</p>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">

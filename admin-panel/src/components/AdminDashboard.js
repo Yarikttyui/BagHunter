@@ -8,6 +8,38 @@ import SortableTable from './SortableTable';
 import AdminComments from './AdminComments';
 import { API_BASE_URL, ASSET_BASE_URL } from '../config/api';
 
+const STATUS_LABELS = {
+  pending: '\u041e\u0436\u0438\u0434\u0430\u0435\u0442',
+  in_transit: '\u0412 \u043f\u0443\u0442\u0438',
+  delivered: '\u0414\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u043e',
+  cancelled: '\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u043e'
+};
+
+const STATUS_DESCRIPTIONS = {
+  pending: '\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 \u043e\u0436\u0438\u0434\u0430\u0435\u0442 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u043a\u0438 \u0441\u043e\u0442\u0440\u0443\u0434\u043d\u0438\u043a\u043e\u043c \u0441\u043a\u043b\u0430\u0434\u0430',
+  in_transit: '\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u043f\u0435\u0440\u0435\u0434\u0430\u043d\u0430 \u0432 \u043b\u043e\u0433\u0438\u0441\u0442\u0438\u043a\u0443 \u0438 \u043d\u0430\u0445\u043e\u0434\u0438\u0442\u0441\u044f \u0432 \u043f\u0443\u0442\u0438',
+  delivered: '\u041f\u043e\u0441\u0442\u0430\u0432\u043a\u0430 \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0430 \u0438 \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u0437\u0430\u043a\u0440\u044b\u0442\u0430',
+  cancelled: '\u041e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u0435 \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u043e \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0435\u043c \u0438\u043b\u0438 \u0430\u0434\u043c\u0438\u043d\u0438\u0441\u0442\u0440\u0430\u0442\u043e\u0440\u043e\u043c'
+};
+
+const ACTION_LABELS = {
+  create: '\u0421\u043e\u0437\u0434\u0430\u043d\u0438\u0435',
+  created: '\u0421\u043e\u0437\u0434\u0430\u043d\u0438\u0435',
+  update: '\u041e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435',
+  updated: '\u041e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435',
+  delete: '\u0423\u0434\u0430\u043b\u0435\u043d\u0438\u0435',
+  deleted: '\u0423\u0434\u0430\u043b\u0435\u043d\u0438\u0435',
+  status_change: '\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u0441\u0442\u0430\u0442\u0443\u0441\u0430',
+  status_changed: '\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u0441\u0442\u0430\u0442\u0443\u0441\u0430'
+};
+
+const LOG_DEFAULT_DESCRIPTIONS = {
+  created: '\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u0441\u043e\u0437\u0434\u0430\u043d\u0430',
+  updated: '\u0414\u0430\u043d\u043d\u044b\u0435 \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u043e\u0439 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b'
+};
+
+const hasCyrillic = (value) => /[А-Яа-яЁё]/.test(value || '');
+
 const API_URL = API_BASE_URL;
 
 function AdminDashboard({ user, onLogout }) {
@@ -74,6 +106,23 @@ function AdminDashboard({ user, onLogout }) {
   const [currentPageInvoices, setCurrentPageInvoices] = useState(1);
   const [currentPageTransactions, setCurrentPageTransactions] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const normalizeDateField = useCallback(
+    (value) => {
+      if (!value) {
+        return today;
+      }
+
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return typeof value === 'string' ? value.slice(0, 10) : today;
+      }
+
+      return parsed.toISOString().split('T')[0];
+    },
+    [today]
+  );
 
   const isAdmin = user.role === 'admin';
   const isAccountant = user.role === 'accountant';
@@ -314,7 +363,29 @@ function AdminDashboard({ user, onLogout }) {
 
   const openModal = (type, data = {}) => {
     setModalType(type);
-    setFormData(data);
+
+    if (type === 'invoice') {
+      if (data && data.id) {
+        setFormData({
+          ...data,
+          invoice_date: normalizeDateField(data.invoice_date),
+          delivery_date: normalizeDateField(data.delivery_date)
+        });
+      } else {
+        setFormData({
+          invoice_number: '',
+          client_id: '',
+          invoice_date: today,
+          delivery_date: today,
+          status: 'pending',
+          notes: '',
+          ...data
+        });
+      }
+    } else {
+      setFormData(data);
+    }
+
     setShowModal(true);
   };
 
@@ -334,13 +405,16 @@ function AdminDashboard({ user, onLogout }) {
           await axios.post(`${API_URL}/clients`, formData);
         }
       } else if (modalType === 'invoice') {
+        const invoicePayload = {
+          ...formData,
+          invoice_date: formData.id ? (formData.invoice_date || today) : today,
+          user_id: user.id
+        };
+
         if (formData.id) {
-          await axios.put(`${API_URL}/invoices/${formData.id}`, {
-            ...formData,
-            user_id: user.id
-          });
+          await axios.put(`${API_URL}/invoices/${formData.id}`, invoicePayload);
         } else {
-          await axios.post(`${API_URL}/invoices`, formData);
+          await axios.post(`${API_URL}/invoices`, invoicePayload);
         }
       } else if (modalType === 'transaction') {
         await axios.post(`${API_URL}/transactions`, formData);
@@ -475,15 +549,54 @@ const downloadInvoicePdf = async (invoiceId) => {
     return new Date(dateString).toLocaleDateString('ru-RU');
   };
 
-  const getStatusText = (status) => {
-    const statuses = {
-      pending: 'Ожидает',
-      in_transit: 'В пути',
-      delivered: 'Доставлено',
-      cancelled: 'Отменено'
-    };
-    return statuses[status] || status;
-  };
+  const getStatusText = useCallback(
+    (status) => STATUS_LABELS[status] || status,
+    []
+  );
+
+  const getStatusChangeText = useCallback(
+    (fromStatus, toStatus) => {
+      const fromText = STATUS_DESCRIPTIONS[fromStatus] || STATUS_LABELS[fromStatus] || fromStatus || '-';
+      const toText = STATUS_DESCRIPTIONS[toStatus] || STATUS_LABELS[toStatus] || toStatus || '-';
+      return `Статус изменён с "${fromText}" на "${toText}"`;
+    },
+    []
+  );
+
+  const getActionLabel = useCallback(
+    (action) => ACTION_LABELS[action] || ACTION_LABELS[action?.toLowerCase?.()] || action,
+    []
+  );
+
+  const formatLogDescription = useCallback(
+    (log) => {
+      if (!log) {
+        return '';
+      }
+
+      const raw = log.description || '';
+      const actionKey = log.action;
+
+      if (actionKey === 'status_change' || actionKey === 'status_changed') {
+        return getStatusChangeText(log.old_status, log.new_status);
+      }
+
+      if (actionKey === 'create' || actionKey === 'created') {
+        return LOG_DEFAULT_DESCRIPTIONS.created;
+      }
+
+      if (actionKey === 'update' || actionKey === 'updated') {
+        return LOG_DEFAULT_DESCRIPTIONS.updated;
+      }
+
+      if (hasCyrillic(raw)) {
+        return raw;
+      }
+
+      return raw ? 'Данные лога недоступны' : '';
+    },
+    [getStatusChangeText]
+  );
 
   const getPaymentMethodText = (method) => {
     const methods = {
@@ -1232,7 +1345,9 @@ const downloadInvoicePdf = async (invoiceId) => {
             </div>
 
             <div className="logs-list">
-              {invoiceLogs.map(log => (
+              {invoiceLogs.map(log => {
+                const description = formatLogDescription(log);
+                return (
                 <div key={log.id} className="log-card">
                   <div className="log-card-header">
                     <div className="log-main-info">
@@ -1244,11 +1359,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                       </div>
                     </div>
                     <div className="log-action-badge">
-                      {log.action === 'created' ? 'Создание' :
-                       log.action === 'updated' ? 'Обновление' :
-                       log.action === 'deleted' ? 'Удаление' :
-                       log.action === 'status_changed' ? 'Изменение статуса' :
-                       log.action}
+                      {getActionLabel(log.action)}
                     </div>
                   </div>
 
@@ -1280,11 +1391,7 @@ const downloadInvoicePdf = async (invoiceId) => {
                         <div className="status-item">
                           <span className="status-label">Старый статус:</span>
                           <span className={`status-badge status-${log.old_status}`}>
-                            {log.old_status === 'pending' ? 'Ожидает' :
-                             log.old_status === 'in_transit' ? 'В пути' :
-                             log.old_status === 'delivered' ? 'Доставлено' :
-                             log.old_status === 'cancelled' ? 'Отменено' :
-                             log.old_status}
+                            {getStatusText(log.old_status)}
                           </span>
                         </div>
                       )}
@@ -1293,24 +1400,21 @@ const downloadInvoicePdf = async (invoiceId) => {
                         <div className="status-item">
                           <span className="status-label">Новый статус:</span>
                           <span className={`status-badge status-${log.new_status}`}>
-                            {log.new_status === 'pending' ? 'Ожидает' :
-                             log.new_status === 'in_transit' ? 'В пути' :
-                             log.new_status === 'delivered' ? 'Доставлено' :
-                             log.new_status === 'cancelled' ? 'Отменено' :
-                             log.new_status}
+                            {getStatusText(log.new_status)}
                           </span>
                         </div>
                       )}
                     </div>
 
-                    {log.description && (
+                    {description && (
                       <div className="log-description">
-                        {log.description}
+                        {description}
                       </div>
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -1479,16 +1583,21 @@ const downloadInvoicePdf = async (invoiceId) => {
                   <label style={{color: '#ffffff'}}>Дата накладной *</label>
                   <input
                     type="date"
-                    value={formData.invoice_date || ''}
-                    onChange={(e) => setFormData({...formData, invoice_date: e.target.value})}
+                    value={formData.invoice_date || today}
+                    onChange={() => {}}
+                    readOnly
+                    min={today}
+                    max={today}
                     required
                   />
 
-                  <label style={{color: '#ffffff'}}>Дата доставки</label>
+                  <label style={{color: '#ffffff'}}>Дата доставки *</label>
                   <input
                     type="date"
                     value={formData.delivery_date || ''}
                     onChange={(e) => setFormData({...formData, delivery_date: e.target.value})}
+                    required
+                    aria-required="true"
                   />
 
                   <label style={{color: '#ffffff'}}>Статус *</label>

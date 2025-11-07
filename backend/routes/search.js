@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { requireRole } = require('../middleware/auth');
+
+router.use(requireRole('admin', 'accountant'));
 
 
 router.get('/global', async (req, res) => {
@@ -36,7 +39,6 @@ router.get('/global', async (req, res) => {
         LEFT JOIN clients c ON i.client_id = c.id
         WHERE i.invoice_number LIKE ?
            OR c.company_name LIKE ?
-           OR i.delivery_address LIKE ?
         ORDER BY i.invoice_date DESC
         LIMIT ?
       `, [searchTerm, searchTerm, searchTerm, maxResults]);
@@ -72,21 +74,19 @@ router.get('/global', async (req, res) => {
         SELECT 
           p.id,
           p.name,
-          p.sku,
-          p.barcode,
+          p.unit,
           p.price,
-          p.status,
-          c.name as category_name,
+          p.stock_quantity,
+          p.category,
+          p.is_active,
           'product' as entity_type
         FROM products p
-        LEFT JOIN product_categories c ON p.category_id = c.id
         WHERE p.name LIKE ?
-           OR p.sku LIKE ?
-           OR p.barcode LIKE ?
-           OR p.description LIKE ?
+           OR COALESCE(p.category, '') LIKE ?
+           OR COALESCE(p.description, '') LIKE ?
         ORDER BY p.name ASC
         LIMIT ?
-      `, [searchTerm, searchTerm, searchTerm, searchTerm, maxResults]);
+      `, [searchTerm, searchTerm, searchTerm, maxResults]);
       
       results.products = products;
     }
@@ -153,9 +153,9 @@ router.get('/invoices', async (req, res) => {
     const params = [];
     
     if (q) {
-      query += ' AND (i.invoice_number LIKE ? OR c.company_name LIKE ? OR i.delivery_address LIKE ?)';
+      query += ' AND (i.invoice_number LIKE ? OR c.company_name LIKE ?)';
       const term = `%${q}%`;
-      params.push(term, term, term);
+      params.push(term, term);
     }
     
     if (status) {
@@ -277,36 +277,36 @@ router.get('/products', async (req, res) => {
       SELECT 
         p.id,
         p.name,
-        p.sku,
-        p.barcode,
         p.description,
         p.unit,
         p.price,
         p.stock_quantity,
         p.category,
         p.is_active,
-        c.name as category_name,
         'product' as entity_type
       FROM products p
-      LEFT JOIN product_categories c ON p.category_id = c.id
       WHERE 1=1
     `;
     const params = [];
     
     if (q) {
-      query += ' AND (p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)';
+      query += ' AND (p.name LIKE ? OR COALESCE(p.category, \'\') LIKE ? OR COALESCE(p.description, \'\') LIKE ?)';
       const term = `%${q}%`;
       params.push(term, term, term);
     }
     
-    if (category_id) {
-      query += ' AND p.category_id = ?';
-      params.push(category_id);
+    const categoryFilter = req.query.category || category_id;
+    if (categoryFilter) {
+      query += ' AND p.category = ?';
+      params.push(categoryFilter);
     }
     
     if (status) {
-      query += ' AND p.status = ?';
-      params.push(status);
+      if (status === 'active') {
+        query += ' AND p.is_active = TRUE';
+      } else if (status === 'inactive') {
+        query += ' AND p.is_active = FALSE';
+      }
     }
     
     if (price_min) {
@@ -355,7 +355,7 @@ router.get('/suggestions', async (req, res) => {
         
       case 'products':
         const [products] = await db.query(
-          'SELECT id, name as label, sku as sublabel FROM products WHERE name LIKE ? OR sku LIKE ? LIMIT ?',
+          'SELECT id, name as label, COALESCE(category, unit) as sublabel FROM products WHERE name LIKE ? OR COALESCE(category, \'\') LIKE ? LIMIT ?',
           [searchTerm, searchTerm, maxResults]
         );
         suggestions = products;
