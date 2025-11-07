@@ -47,8 +47,8 @@ function Login({ onLogin, onSwitchToRegister }) {
       }
 
       axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('client_token', token);
+      localStorage.setItem('client_user', JSON.stringify(user));
       onLogin(user);
     } catch (err) {
       console.error(err);

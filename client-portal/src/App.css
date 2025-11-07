@@ -636,6 +636,36 @@
   font-family: inherit;
 }
 
+.form-group input[type="date"] {
+  color-scheme: dark;
+  color: #ffffff !important;
+}
+
+.form-group input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+.form-group input[type="date"]::-webkit-datetime-edit {
+  color: #ffffff;
+}
+
+.form-group input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  color: #ffffff;
+}
+
+.form-group input[type="date"]::-webkit-datetime-edit-text,
+.form-group input[type="date"]::-webkit-datetime-edit-month-field,
+.form-group input[type="date"]::-webkit-datetime-edit-day-field,
+.form-group input[type="date"]::-webkit-datetime-edit-year-field {
+  color: #ffffff;
+}
+
+.form-group input[readonly] {
+  color: #ffffff !important;
+  opacity: 0.9;
+}
+
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {

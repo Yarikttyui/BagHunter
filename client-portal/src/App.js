@@ -10,8 +10,8 @@ function App() {
   const [view, setView] = useState('login');
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
+    const storedToken = localStorage.getItem('client_token');
+    const storedUser = localStorage.getItem('client_user');
 
     if (storedToken && storedUser) {
       axios.defaults.headers.common.Authorization = `Bearer ${storedToken}`;
@@ -19,8 +19,8 @@ function App() {
         setUser(JSON.parse(storedUser));
       } catch (error) {
         console.error('Не удалось прочитать данные пользователя из localStorage', error);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        localStorage.removeItem('client_token');
+        localStorage.removeItem('client_user');
       }
     }
   }, []);
@@ -32,8 +32,8 @@ function App() {
   const handleLogout = () => {
     setUser(null);
     delete axios.defaults.headers.common.Authorization;
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem('client_token');
+    localStorage.removeItem('client_user');
   };
 
   return (

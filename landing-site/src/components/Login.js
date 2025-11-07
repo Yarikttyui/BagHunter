@@ -30,12 +30,15 @@ const Login = () => {
       const response = await axios.post(`${API_BASE_URL}/auth/login`, formData);
       
       if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        const { user, token } = response.data;
         
-        if (response.data.user.role === 'admin' || response.data.user.role === 'accountant') {
+        if (user.role === 'admin' || user.role === 'accountant') {
+          localStorage.setItem('admin_token', token);
+          localStorage.setItem('admin_user', JSON.stringify(user));
           window.location.href = ADMIN_PANEL_URL;
         } else {
+          localStorage.setItem('client_token', token);
+          localStorage.setItem('client_user', JSON.stringify(user));
           window.location.href = CLIENT_PORTAL_URL;
         }
       }

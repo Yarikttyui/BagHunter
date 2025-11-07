@@ -459,7 +459,7 @@ function AdminDashboard({ user, onLogout }) {
 
   const downloadFileWithToken = async (url, filename, errorMessage) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('admin_token');
       const response = await axios.get(url, {
         responseType: 'blob',
         headers: token ? { Authorization: `Bearer ${token}` } : {}

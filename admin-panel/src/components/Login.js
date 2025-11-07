@@ -38,8 +38,8 @@ function Login({ onLogin }) {
 
       if (token && user && (user.role === 'admin' || user.role === 'accountant')) {
         axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-        localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem('admin_token', token);
+        localStorage.setItem('admin_user', JSON.stringify(user));
         onLogin(user);
       } else {
         setError('Недостаточно прав для входа в административную панель.');

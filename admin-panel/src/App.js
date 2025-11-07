@@ -55,8 +55,8 @@ function App() {
   const handleLogout = useCallback(() => {
     setUser(null);
     delete axios.defaults.headers.common.Authorization;
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
   }, [setUser]);
 
   const handleLogin = useCallback((userData) => {
@@ -64,8 +64,8 @@ function App() {
   }, [setUser]);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
+    const storedToken = localStorage.getItem('admin_token');
+    const storedUser = localStorage.getItem('admin_user');
 
     if (storedToken && storedUser) {
       if (isTokenExpired(storedToken)) {
@@ -75,7 +75,12 @@ function App() {
 
       axios.defaults.headers.common.Authorization = `Bearer ${storedToken}`;
       try {
-        setUser(JSON.parse(storedUser));
+        const parsedUser = JSON.parse(storedUser);
+        if (parsedUser.role === 'admin' || parsedUser.role === 'accountant') {
+          setUser(parsedUser);
+        } else {
+          handleLogout();
+        }
       } catch (err) {
         console.error('Failed to read user data from localStorage', err);
         handleLogout();
