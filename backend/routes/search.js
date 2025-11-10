@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { requireRole } = require('../middleware/auth');
+
+router.use(requireRole('admin', 'accountant'));
 
 
 router.get('/global', async (req, res) => {
@@ -19,9 +22,6 @@ router.get('/global', async (req, res) => {
       invoices: [],
       clients: [],
       products: [],
-      drivers: [],
-      vehicles: [],
-      waybills: [],
       users: []
     };
     
@@ -39,7 +39,6 @@ router.get('/global', async (req, res) => {
         LEFT JOIN clients c ON i.client_id = c.id
         WHERE i.invoice_number LIKE ?
            OR c.company_name LIKE ?
-           OR i.delivery_address LIKE ?
         ORDER BY i.invoice_date DESC
         LIMIT ?
       `, [searchTerm, searchTerm, searchTerm, maxResults]);
@@ -75,88 +74,21 @@ router.get('/global', async (req, res) => {
         SELECT 
           p.id,
           p.name,
-          p.sku,
-          p.barcode,
+          p.unit,
           p.price,
-          p.status,
-          c.name as category_name,
+          p.stock_quantity,
+          p.category,
+          p.is_active,
           'product' as entity_type
         FROM products p
-        LEFT JOIN product_categories c ON p.category_id = c.id
         WHERE p.name LIKE ?
-           OR p.sku LIKE ?
-           OR p.barcode LIKE ?
-           OR p.description LIKE ?
+           OR COALESCE(p.category, '') LIKE ?
+           OR COALESCE(p.description, '') LIKE ?
         ORDER BY p.name ASC
         LIMIT ?
-      `, [searchTerm, searchTerm, searchTerm, searchTerm, maxResults]);
+      `, [searchTerm, searchTerm, searchTerm, maxResults]);
       
       results.products = products;
-    }
-    
-    if (types.includes('all') || types.includes('drivers')) {
-      const [drivers] = await db.query(`
-        SELECT 
-          id,
-          full_name,
-          license_number,
-          phone,
-          status,
-          'driver' as entity_type
-        FROM drivers
-        WHERE full_name LIKE ?
-           OR license_number LIKE ?
-           OR phone LIKE ?
-        ORDER BY full_name ASC
-        LIMIT ?
-      `, [searchTerm, searchTerm, searchTerm, maxResults]);
-      
-      results.drivers = drivers;
-    }
-    
-    if (types.includes('all') || types.includes('vehicles')) {
-      const [vehicles] = await db.query(`
-        SELECT 
-          v.id,
-          v.vehicle_number,
-          v.model,
-          v.vehicle_type,
-          v.status,
-          d.full_name as default_driver_name,
-          'vehicle' as entity_type
-        FROM vehicles v
-        LEFT JOIN drivers d ON v.default_driver_id = d.id
-        WHERE v.vehicle_number LIKE ?
-           OR v.model LIKE ?
-           OR v.vin_number LIKE ?
-        ORDER BY v.vehicle_number ASC
-        LIMIT ?
-      `, [searchTerm, searchTerm, searchTerm, maxResults]);
-      
-      results.vehicles = vehicles;
-    }
-    
-    if (types.includes('all') || types.includes('waybills')) {
-      const [waybills] = await db.query(`
-        SELECT 
-          w.id,
-          w.waybill_number,
-          w.departure_date,
-          w.status,
-          v.vehicle_number,
-          d.full_name as driver_name,
-          w.route,
-          'waybill' as entity_type
-        FROM waybills w
-        LEFT JOIN vehicles v ON w.vehicle_id = v.id
-        LEFT JOIN drivers d ON w.driver_id = d.id
-        WHERE w.waybill_number LIKE ?
-           OR w.route LIKE ?
-        ORDER BY w.departure_date DESC
-        LIMIT ?
-      `, [searchTerm, searchTerm, maxResults]);
-      
-      results.waybills = waybills;
     }
     
     if (types.includes('all') || types.includes('users')) {
@@ -206,7 +138,6 @@ router.get('/invoices', async (req, res) => {
       date_to,
       amount_min,
       amount_max,
-      has_waybill,
       limit = 50
     } = req.query;
     
@@ -214,23 +145,17 @@ router.get('/invoices', async (req, res) => {
       SELECT 
         i.*,
         c.company_name as client_name,
-        c.contact_person,
-        v.vehicle_number,
-        d.full_name as driver_name,
-        w.waybill_number
+        c.contact_person
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
-      LEFT JOIN vehicles v ON i.vehicle_id = v.id
-      LEFT JOIN drivers d ON i.driver_id = d.id
-      LEFT JOIN waybills w ON i.id = w.invoice_id
       WHERE 1=1
     `;
     const params = [];
     
     if (q) {
-      query += ' AND (i.invoice_number LIKE ? OR c.company_name LIKE ? OR i.delivery_address LIKE ?)';
+      query += ' AND (i.invoice_number LIKE ? OR c.company_name LIKE ?)';
       const term = `%${q}%`;
-      params.push(term, term, term);
+      params.push(term, term);
     }
     
     if (status) {
@@ -261,12 +186,6 @@ router.get('/invoices', async (req, res) => {
     if (amount_max) {
       query += ' AND i.total_amount <= ?';
       params.push(amount_max);
-    }
-    
-    if (has_waybill === 'true') {
-      query += ' AND w.id IS NOT NULL';
-    } else if (has_waybill === 'false') {
-      query += ' AND w.id IS NULL';
     }
     
     query += ' ORDER BY i.invoice_date DESC LIMIT ?';
@@ -351,39 +270,43 @@ router.get('/products', async (req, res) => {
       status,
       price_min,
       price_max,
-      low_stock,
-      in_stock,
       limit = 50
     } = req.query;
     
     let query = `
       SELECT 
-        p.*,
-        c.name as category_name,
-        COALESCE(SUM(s.quantity), 0) as total_quantity,
-        COALESCE(SUM(s.reserved_quantity), 0) as total_reserved,
-        COALESCE(SUM(s.quantity) - SUM(s.reserved_quantity), 0) as available_quantity
+        p.id,
+        p.name,
+        p.description,
+        p.unit,
+        p.price,
+        p.stock_quantity,
+        p.category,
+        p.is_active,
+        'product' as entity_type
       FROM products p
-      LEFT JOIN product_categories c ON p.category_id = c.id
-      LEFT JOIN stock s ON p.id = s.product_id
       WHERE 1=1
     `;
     const params = [];
     
     if (q) {
-      query += ' AND (p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)';
+      query += ' AND (p.name LIKE ? OR COALESCE(p.category, \'\') LIKE ? OR COALESCE(p.description, \'\') LIKE ?)';
       const term = `%${q}%`;
       params.push(term, term, term);
     }
     
-    if (category_id) {
-      query += ' AND p.category_id = ?';
-      params.push(category_id);
+    const categoryFilter = req.query.category || category_id;
+    if (categoryFilter) {
+      query += ' AND p.category = ?';
+      params.push(categoryFilter);
     }
     
     if (status) {
-      query += ' AND p.status = ?';
-      params.push(status);
+      if (status === 'active') {
+        query += ' AND p.is_active = TRUE';
+      } else if (status === 'inactive') {
+        query += ' AND p.is_active = FALSE';
+      }
     }
     
     if (price_min) {
@@ -394,18 +317,6 @@ router.get('/products', async (req, res) => {
     if (price_max) {
       query += ' AND p.price <= ?';
       params.push(price_max);
-    }
-    
-    query += ' GROUP BY p.id';
-    
-    if (low_stock === 'true') {
-      query += ' HAVING available_quantity < p.min_stock';
-    }
-    
-    if (in_stock === 'true') {
-      query += ' HAVING available_quantity > 0';
-    } else if (in_stock === 'false') {
-      query += ' HAVING available_quantity = 0';
     }
     
     query += ' ORDER BY p.name ASC LIMIT ?';
@@ -444,26 +355,10 @@ router.get('/suggestions', async (req, res) => {
         
       case 'products':
         const [products] = await db.query(
-          'SELECT id, name as label, sku as sublabel FROM products WHERE name LIKE ? OR sku LIKE ? LIMIT ?',
+          'SELECT id, name as label, COALESCE(category, unit) as sublabel FROM products WHERE name LIKE ? OR COALESCE(category, \'\') LIKE ? LIMIT ?',
           [searchTerm, searchTerm, maxResults]
         );
         suggestions = products;
-        break;
-        
-      case 'drivers':
-        const [drivers] = await db.query(
-          'SELECT id, full_name as label, phone as sublabel FROM drivers WHERE full_name LIKE ? LIMIT ?',
-          [searchTerm, maxResults]
-        );
-        suggestions = drivers;
-        break;
-        
-      case 'vehicles':
-        const [vehicles] = await db.query(
-          'SELECT id, vehicle_number as label, model as sublabel FROM vehicles WHERE vehicle_number LIKE ? OR model LIKE ? LIMIT ?',
-          [searchTerm, searchTerm, maxResults]
-        );
-        suggestions = vehicles;
         break;
         
       default:

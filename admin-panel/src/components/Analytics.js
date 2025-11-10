@@ -338,7 +338,7 @@ function Analytics() {
       <div className="chart-card">
         <h2>👑 ТОП-10 клиентов по выручке</h2>
         <div className="top-clients-table">
-          <table className="glass-table">
+          <table className="glass-table glass-table--compact">
             <thead>
               <tr>
                 <th>#</th>

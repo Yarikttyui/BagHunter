@@ -12,14 +12,25 @@ function Login({ onLogin, onSwitchToRegister }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const usernameRegex = /^[a-zA-Z0-9._-]{3,50}$/;
+  const isValidIdentifier = (value) => emailRegex.test(value) || usernameRegex.test(value);
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+
+    const normalizedUsername = username.trim();
+    if (!isValidIdentifier(normalizedUsername)) {
+      setError('Введите корректный email или логин (3-50 символов).');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const response = await axios.post(`${API_URL}/auth/login`, {
-        username,
+        username: normalizedUsername,
         password
       });
 
@@ -36,8 +47,8 @@ function Login({ onLogin, onSwitchToRegister }) {
       }
 
       axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('client_token', token);
+      localStorage.setItem('client_user', JSON.stringify(user));
       onLogin(user);
     } catch (err) {
       console.error(err);
@@ -64,7 +75,7 @@ function Login({ onLogin, onSwitchToRegister }) {
       />
       <div className="login-box">
         <h1>Личный кабинет клиента</h1>
-        <p className="subtitle">BAGXanter Logistics</p>
+        <p className="subtitle">BagHunter Logistics</p>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">

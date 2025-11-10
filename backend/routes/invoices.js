@@ -1,10 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const emailService = require('../services/emailService');
 const pdfService = require('../services/pdfService');
 const excelService = require('../services/excelService');
 const { requireRole } = require('../middleware/auth');
+const {
+  getPagination,
+  parseNumberRange,
+  applyDateRange,
+  applyNumberRange
+} = require('../utils/queryHelpers');
 
 const STATUS_TEXT = {
   pending: 'Ожидает подтверждения',
@@ -20,12 +25,28 @@ const STATUS_TEXT_EXTENDED = {
   cancelled: 'Оформление отменено пользователем или администратором'
 };
 
-const STATUS_EMOJI = {
-  pending: '⏳',
-  in_transit: '🚚',
-  delivered: '✅',
-  cancelled: '❌'
+function getStatusChangeDescription(oldStatus, newStatus) {
+  return `\u0421\u0442\u0430\u0442\u0443\u0441 \u0438\u0437\u043c\u0435\u043d\u0451\u043d \u0441 \"${STATUS_TEXT_EXTENDED[oldStatus] || oldStatus}\" \u043d\u0430 \"${STATUS_TEXT_EXTENDED[newStatus] || newStatus}\"`;
+}
+
+const LOG_DESCRIPTIONS = {
+  created: '\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u0441\u043e\u0437\u0434\u0430\u043d\u0430',
+  updated: '\u0414\u0430\u043d\u043d\u044b\u0435 \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u043e\u0439 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b'
 };
+
+const NOTIFICATION_TEXT = {
+  newInvoiceTitle: '\u041d\u043e\u0432\u0430\u044f \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u043e\u0436\u0438\u0434\u0430\u0435\u0442 \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0438',
+  statusUpdatedTitle: '\u0421\u0442\u0430\u0442\u0443\u0441 \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u043e\u0439 \u043e\u0431\u043d\u043e\u0432\u043b\u0451\u043d'
+};
+
+function buildNewInvoiceNotificationMessage(clientName, invoiceNumber) {
+  return `\u041a\u043b\u0438\u0435\u043d\u0442 \"${clientName}\" \u043e\u0444\u043e\u0440\u043c\u0438\u043b \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u0443\u044e №${invoiceNumber}`;
+}
+
+function buildStatusNotificationMessage(invoiceNumber, status) {
+  return `\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f №${invoiceNumber}: ${STATUS_TEXT[status] || status}`;
+}
+
 
 function canCurrentUserAccessInvoice(user, invoiceClientId) {
   if (!user || !user.role) {
@@ -47,37 +68,95 @@ async function fetchInvoiceWithClient(invoiceId) {
   return rows;
 }
 
-router.get('/', async (req, res) => {
+router.get('/', requireRole('admin', 'accountant', 'client'), async (req, res) => {
   try {
     const currentUser = req.user || {};
-    let query = `
-      SELECT i.*, c.company_name as client_name
-      FROM invoices i
-      LEFT JOIN clients c ON i.client_id = c.id
-    `;
-    const params = [];
+    const search = (req.query.search || '').trim();
+    const status = (req.query.status || '').trim();
+    const clientIdFilter = req.query.clientId ? Number.parseInt(req.query.clientId, 10) : undefined;
+    const dateFrom = req.query.dateFrom;
+    const dateTo = req.query.dateTo;
+    const { min: minAmount, max: maxAmount } = parseNumberRange(req.query, 'minAmount', 'maxAmount');
 
-    if (currentUser.role === 'client') {
-      if (!currentUser.client_id) {
-        return res.json([]);
+    const applyUserFilter = async () => {
+      if (currentUser.role === 'client') {
+        if (!currentUser.client_id) {
+          return { conditions: ['1 = 0'], params: [] };
+        }
+        return { conditions: ['i.client_id = ?'], params: [currentUser.client_id] };
       }
-      query += ' WHERE i.client_id = ?';
-      params.push(currentUser.client_id);
-    } else if (req.query.userRole === 'client' && req.query.userId) {
-      const [userRows] = await db.query('SELECT client_id FROM users WHERE id = ?', [req.query.userId]);
-      const clientId = userRows[0]?.client_id;
-      if (clientId) {
-        query += ' WHERE i.client_id = ?';
-        params.push(clientId);
-      } else {
-        return res.json([]);
+
+      if (req.query.userRole === 'client' && req.query.userId) {
+        const [userRows] = await db.query('SELECT client_id FROM users WHERE id = ?', [req.query.userId]);
+        const clientId = userRows[0]?.client_id;
+        if (!clientId) {
+          return { conditions: ['1 = 0'], params: [] };
+        }
+        return { conditions: ['i.client_id = ?'], params: [clientId] };
       }
+
+      return { conditions: [], params: [] };
+    };
+
+    const { conditions: baseConditions, params: baseParams } = await applyUserFilter();
+    const { page, pageSize, offset } = getPagination(req.query);
+
+    const conditions = [...baseConditions];
+    const params = [...baseParams];
+
+    if (search) {
+      const term = `%${search.toLowerCase()}%`;
+      conditions.push('(LOWER(i.invoice_number) LIKE ? OR LOWER(c.company_name) LIKE ?)');
+      params.push(term, term);
     }
 
-    query += ' ORDER BY i.created_at DESC';
+    if (status) {
+      conditions.push('i.status = ?');
+      params.push(status);
+    }
 
-    const [rows] = await db.query(query, params);
-    res.json(rows);
+    if (clientIdFilter) {
+      conditions.push('i.client_id = ?');
+      params.push(clientIdFilter);
+    }
+
+    applyDateRange(conditions, params, 'i.invoice_date', dateFrom, dateTo);
+    applyNumberRange(conditions, params, 'i.total_amount', minAmount, maxAmount);
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const [[{ total }]] = await db.query(
+      `
+        SELECT COUNT(*) AS total
+        FROM invoices i
+        LEFT JOIN clients c ON i.client_id = c.id
+        ${whereClause}
+      `,
+      params
+    );
+
+    const [rows] = await db.query(
+      `
+        SELECT 
+          i.*,
+          c.company_name as client_name
+        FROM invoices i
+        LEFT JOIN clients c ON i.client_id = c.id
+        ${whereClause}
+        ORDER BY i.created_at DESC
+        LIMIT ?
+        OFFSET ?
+      `,
+      [...params, pageSize, offset]
+    );
+
+    res.json({
+      items: rows,
+      total,
+      page,
+      pageSize,
+      hasMore: offset + rows.length < total
+    });
   } catch (error) {
     console.error('Не удалось получить список накладных:', error);
     res.status(500).json({ error: error.message });
@@ -124,7 +203,7 @@ router.get('/logs/all', requireRole('admin'), async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireRole('admin', 'accountant', 'client'), async (req, res) => {
   try {
     const currentUser = req.user || {};
     const invoiceRows = await fetchInvoiceWithClient(req.params.id);
@@ -151,7 +230,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.get('/:id/pdf', async (req, res) => {
+router.get('/:id/pdf', requireRole('admin', 'accountant', 'client'), async (req, res) => {
   try {
     const currentUser = req.user || {};
     const invoiceRows = await fetchInvoiceWithClient(req.params.id);
@@ -199,6 +278,10 @@ router.get('/:id/logs', requireRole('admin', 'accountant'), async (req, res) => 
 });
 
 router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) => {
+  let connection;
+  let invoiceId;
+  let targetClientId = null;
+
   try {
     const currentUser = req.user || {};
     const {
@@ -211,7 +294,14 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
       items
     } = req.body;
 
-    let targetClientId = client_id;
+    if (!delivery_date) {
+      return res.status(400).json({ error: 'Желаемая дата доставки обязательна' });
+    }
+
+    const normalizedInvoiceDate = new Date().toISOString().split('T')[0];
+    const normalizedNotes = notes || null;
+
+    targetClientId = client_id;
 
     if (currentUser.role === 'client') {
       if (!currentUser.client_id) {
@@ -219,38 +309,87 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
       }
       targetClientId = currentUser.client_id;
     }
-    
-    const [result] = await db.query(
+
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
       'INSERT INTO invoices (invoice_number, client_id, invoice_date, delivery_date, status, notes) VALUES (?, ?, ?, ?, ?, ?)',
-      [invoice_number, targetClientId, invoice_date, delivery_date, status || 'pending', notes]
+      [
+        invoice_number,
+        targetClientId,
+        normalizedInvoiceDate,
+        delivery_date,
+        status || 'pending',
+        normalizedNotes
+      ]
     );
 
-    const invoiceId = result.insertId;
+    invoiceId = result.insertId;
 
     if (Array.isArray(items) && items.length > 0) {
       for (const item of items) {
-        const product = item.product_id ? 
-          await db.query('SELECT name FROM products WHERE id = ?', [item.product_id]) : 
-          null;
-        const productName = product && product[0] && product[0][0] ? product[0][0].name : (item.product_name || 'Товар');
-        
-        await db.query(
+        let productName = item.product_name || 'Товар';
+
+        if (item.product_id) {
+          const [productRows] = await connection.query('SELECT name FROM products WHERE id = ?', [item.product_id]);
+          if (Array.isArray(productRows) && productRows[0] && productRows[0].name) {
+            productName = productRows[0].name;
+          }
+        }
+
+        await connection.query(
           'INSERT INTO invoice_items (invoice_id, product_id, product_name, quantity, unit_price) VALUES (?, ?, ?, ?, ?)',
           [invoiceId, item.product_id || null, productName, item.quantity, item.unit_price]
         );
       }
     }
 
-    const [sum] = await db.query(
+    const [sumRows] = await connection.query(
       'SELECT SUM(total_price) as total FROM invoice_items WHERE invoice_id = ?',
       [invoiceId]
     );
-    
-    await db.query(
+    const totalAmount = sumRows[0]?.total || 0;
+
+    await connection.query(
       'UPDATE invoices SET total_amount = ? WHERE id = ?',
-      [sum[0].total || 0, invoiceId]
+      [totalAmount, invoiceId]
     );
 
+    await connection.query(
+      'INSERT INTO invoice_logs (invoice_id, user_id, action, old_status, new_status, description) VALUES (?, ?, ?, ?, ?, ?)',
+      [
+        invoiceId,
+        currentUser.id || null,
+        'created',
+        null,
+        status || 'pending',
+        LOG_DESCRIPTIONS.created
+      ]
+    );
+
+    await connection.commit();
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error('[invoices] rollback failed during create:', rollbackError);
+      }
+    }
+    console.error('Не удалось создать накладную:', error);
+    return res.status(500).json({ error: error.message });
+  } finally {
+    if (connection) {
+      try {
+        connection.release();
+      } catch (releaseError) {
+        console.error('[invoices] release failed after create:', releaseError);
+      }
+    }
+  }
+
+  try {
     const [client] = await db.query('SELECT company_name FROM clients WHERE id = ?', [targetClientId]);
     const clientName = client[0]?.company_name || 'Клиент';
 
@@ -259,15 +398,15 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
     );
 
     const io = req.app.get('io');
-    
+
     for (const admin of admins) {
       const [notifResult] = await db.query(
         'INSERT INTO notifications (user_id, type, title, message, invoice_id) VALUES (?, ?, ?, ?, ?)',
         [
           admin.id,
           'new_invoice',
-          '📋 Новая накладная ожидает проверки',
-          `Клиент "${clientName}" оформил накладную №${invoice_number}`,
+          NOTIFICATION_TEXT.newInvoiceTitle,
+          buildNewInvoiceNotificationMessage(clientName, invoice_number),
           invoiceId
         ]
       );
@@ -276,8 +415,8 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
         io.to(`user_${admin.id}`).emit('new_notification', {
           id: notifResult.insertId,
           type: 'new_invoice',
-          title: '📋 Новая накладная ожидает проверки',
-          message: `Клиент "${clientName}" оформил накладную №${invoice_number}`,
+          title: NOTIFICATION_TEXT.newInvoiceTitle,
+          message: buildNewInvoiceNotificationMessage(clientName, invoice_number),
           link: `/invoice/${invoiceId}`,
           invoice_id: invoiceId,
           is_read: false,
@@ -285,90 +424,127 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
         });
       }
     }
-
-    res.status(201).json({ id: invoiceId, message: 'Накладная успешно создана' });
-  } catch (error) {
-    console.error('Не удалось создать накладную:', error);
-    res.status(500).json({ error: error.message });
+  } catch (notificationError) {
+    console.error('[invoices] failed to notify admins about new invoice:', notificationError);
   }
+
+  return res.status(201).json({ id: invoiceId, message: 'Накладная успешно создана' });
 });
 
 router.put('/:id', requireRole('admin', 'accountant'), async (req, res) => {
   try {
-    const { invoice_number, client_id, invoice_date, delivery_date, status, notes, user_id } = req.body;
+    const {
+      invoice_number,
+      client_id,
+      delivery_date,
+      status,
+      notes,
+      user_id
+    } = req.body;
     const actingUserId = user_id || req.user?.id;
-    
-    const [oldInvoice] = await db.query('SELECT status, client_id FROM invoices WHERE id = ?', [req.params.id]);
-    
-    if (oldInvoice.length === 0) {
-      return res.status(404).json({ error: 'Накладная не найдена' });
+
+    if (!delivery_date) {
+      return res.status(400).json({ error: '\u0416\u0435\u043b\u0430\u0435\u043c\u0430\u044f \u0434\u0430\u0442\u0430 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u043e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u0430' });
     }
-    
-    const oldStatus = oldInvoice[0].status;
-    
-    await db.query(
-      'UPDATE invoices SET invoice_number = ?, client_id = ?, invoice_date = ?, delivery_date = ?, status = ?, notes = ? WHERE id = ?',
-      [invoice_number, client_id, invoice_date, delivery_date, status, notes, req.params.id]
+
+    const [existingRows] = await db.query(
+      'SELECT invoice_date, status, client_id FROM invoices WHERE id = ?',
+      [req.params.id]
     );
 
-    if (status && status !== oldStatus && actingUserId) {
+    if (existingRows.length === 0) {
+      return res.status(404).json({ error: '\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u0430' });
+    }
+
+    const existingInvoice = existingRows[0];
+    const preservedInvoiceDate = existingInvoice.invoice_date
+      ? new Date(existingInvoice.invoice_date).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+    const normalizedNotes = notes || null;
+    const nextStatus = status || existingInvoice.status;
+
+    await db.query(
+      'UPDATE invoices SET invoice_number = ?, client_id = ?, invoice_date = ?, delivery_date = ?, status = ?, notes = ? WHERE id = ?',
+      [
+        invoice_number,
+        client_id,
+        preservedInvoiceDate,
+        delivery_date,
+        nextStatus,
+        normalizedNotes,
+        req.params.id
+      ]
+    );
+
+    if (nextStatus !== existingInvoice.status) {
       await db.query(
         'INSERT INTO invoice_logs (invoice_id, user_id, action, old_status, new_status, description) VALUES (?, ?, ?, ?, ?, ?)',
         [
           req.params.id,
-          actingUserId,
-          'status_change',
-          oldStatus,
-          status,
-          `Статус изменён с "${STATUS_TEXT_EXTENDED[oldStatus] || oldStatus}" на "${STATUS_TEXT_EXTENDED[status] || status}"`
+          actingUserId || null,
+          'status_changed',
+          existingInvoice.status,
+          nextStatus,
+          getStatusChangeDescription(existingInvoice.status, nextStatus)
+        ]
+      );
+    } else {
+      await db.query(
+        'INSERT INTO invoice_logs (invoice_id, user_id, action, old_status, new_status, description) VALUES (?, ?, ?, ?, ?, ?)',
+        [
+          req.params.id,
+          actingUserId || null,
+          'updated',
+          existingInvoice.status,
+          nextStatus,
+          LOG_DESCRIPTIONS.updated
         ]
       );
     }
 
-    if (status && status !== oldStatus) {
-      const [invoiceRows] = await db.query(`
-        SELECT i.*, c.company_name as client_name, c.email, u.id as user_id
+    if (nextStatus !== existingInvoice.status) {
+      const [invoiceRows] = await db.query(
+        `
+        SELECT i.invoice_number, u.id as user_id
         FROM invoices i
         LEFT JOIN clients c ON i.client_id = c.id
         LEFT JOIN users u ON u.client_id = c.id
         WHERE i.id = ?
-      `, [req.params.id]);
+      `,
+        [req.params.id]
+      );
 
-      if (invoiceRows.length > 0) {
-        const invoiceData = invoiceRows[0];
+      if (invoiceRows.length > 0 && invoiceRows[0].user_id) {
+        const { invoice_number: updatedNumber, user_id: targetUserId } = invoiceRows[0];
+        const [notifResult] = await db.query(
+          'INSERT INTO notifications (user_id, type, title, message, invoice_id) VALUES (?, ?, ?, ?, ?)',
+          [
+            targetUserId,
+            'invoice_status',
+            NOTIFICATION_TEXT.statusUpdatedTitle,
+            buildStatusNotificationMessage(updatedNumber, nextStatus),
+            req.params.id
+          ]
+        );
 
-        if (invoiceData.user_id) {
-          const [notifResult] = await db.query(
-            'INSERT INTO notifications (user_id, type, title, message, invoice_id) VALUES (?, ?, ?, ?, ?)',
-            [
-              invoiceData.user_id,
-              'invoice_status',
-              `${STATUS_EMOJI[status] || ''} Статус накладной обновлён`,
-              `Накладная №${invoiceData.invoice_number}: ${STATUS_TEXT[status] || status}`,
-              req.params.id
-            ]
-          );
-
-          const io = req.app.get('io');
-          if (io) {
-            io.to(`user_${invoiceData.user_id}`).emit('new_notification', {
-              id: notifResult.insertId,
-              type: 'invoice_status',
-              title: `${STATUS_EMOJI[status] || ''} Статус накладной обновлён`,
-              message: `Накладная №${invoiceData.invoice_number}: ${STATUS_TEXT[status] || status}`,
-              link: `/invoices/${req.params.id}`,
-              is_read: false,
-              created_at: new Date()
-            });
-          }
+        const io = req.app.get('io');
+        if (io) {
+          io.to(`user_${targetUserId}`).emit('new_notification', {
+            id: notifResult.insertId,
+            type: 'invoice_status',
+            title: NOTIFICATION_TEXT.statusUpdatedTitle,
+            message: buildStatusNotificationMessage(updatedNumber, nextStatus),
+            link: `/invoices/${req.params.id}`,
+            is_read: false,
+            created_at: new Date()
+          });
         }
-
       }
     }
 
-    res.json({ message: 'Накладная успешно обновлена' });
+    res.json({ message: '\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u0443\u0434\u0430\u043b\u0435\u043d\u0430' });
   } catch (error) {
-    console.error('Не удалось обновить накладную:', error);
+    console.error('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u0443\u044e:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -376,7 +552,7 @@ router.put('/:id', requireRole('admin', 'accountant'), async (req, res) => {
 router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     await db.query('DELETE FROM invoices WHERE id = ?', [req.params.id]);
-    res.json({ message: 'Накладная успешно удалена' });
+    res.json({ message: 'Накладная успешно обновлена' });
   } catch (error) {
     console.error('Не удалось удалить накладную:', error);
     res.status(500).json({ error: error.message });

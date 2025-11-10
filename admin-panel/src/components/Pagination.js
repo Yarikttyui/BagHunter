@@ -93,7 +93,7 @@ function Pagination({
       </div>
 
       <div className="items-per-page">
-        <label htmlFor="items-per-page-select">Записей на странице:</label>
+        <label htmlFor="items-per-page-select" style={{color: '#ffffff'}}>Записей на странице:</label>
         <select
           id="items-per-page-select"
           value={itemsPerPage}

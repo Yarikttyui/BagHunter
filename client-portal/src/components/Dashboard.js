@@ -4,9 +4,20 @@ import NotificationBell from './NotificationBell';
 import UserProfile from './UserProfile';
 import Comments from './Comments';
 import ColorBends from './ColorBends';
+import ProductSelector from './ProductSelector';
 import { API_BASE_URL } from '../config/api';
 
 const API_URL = API_BASE_URL;
+
+const normalizeListResponse = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && Array.isArray(payload.items)) {
+    return payload.items;
+  }
+  return [];
+};
 
 function Dashboard({ user, onLogout }) {
   const [invoices, setInvoices] = useState([]);
@@ -17,9 +28,11 @@ function Dashboard({ user, onLogout }) {
   const [showProfile, setShowProfile] = useState(false);
   const [products, setProducts] = useState([]);
   const [invoiceItems, setInvoiceItems] = useState([{ product_id: '', quantity: 1, unit_price: 0 }]);
+  const today = new Date().toISOString().split('T')[0];
   const [formData, setFormData] = useState({
-    invoice_date: new Date().toISOString().split('T')[0],
-    delivery_date: '',
+    invoice_number: '',
+    invoice_date: today,
+    delivery_date: today,
     notes: '',
     items: []
   });
@@ -33,10 +46,10 @@ function Dashboard({ user, onLogout }) {
       const [invoicesRes, statsRes, productsRes] = await Promise.all([
         axios.get(`${API_URL}/invoices`),
         axios.get(`${API_URL}/reports/stats`),
-        axios.get(`${API_URL}/products`)
+        axios.get(`${API_URL}/products?includeInactive=true`)
       ]);
 
-      setInvoices(invoicesRes.data);
+      setInvoices(normalizeListResponse(invoicesRes.data));
       setStats(statsRes.data);
       setProducts(productsRes.data);
     } catch (error) {
@@ -79,10 +92,11 @@ function Dashboard({ user, onLogout }) {
 
   const handleCreateInvoice = () => {
     const invoiceNumber = `INV-${Date.now()}`;
+    const today = new Date().toISOString().split('T')[0];
     setFormData({
       invoice_number: invoiceNumber,
-      invoice_date: new Date().toISOString().split('T')[0],
-      delivery_date: '',
+      invoice_date: today,
+      delivery_date: today,
       notes: '',
       items: []
     });
@@ -102,15 +116,25 @@ function Dashboard({ user, onLogout }) {
 
   const updateInvoiceItem = (index, field, value) => {
     const updated = [...invoiceItems];
-    updated[index][field] = value;
-    
-    if (field === 'product_id' && value) {
-      const product = products.find(p => p.id === parseInt(value));
-      if (product) {
-        updated[index].unit_price = product.price;
-      }
+    if (field === 'quantity') {
+      updated[index].quantity = value;
+    } else if (field === 'unit_price') {
+      updated[index].unit_price = value;
+    } else {
+      updated[index][field] = value;
     }
-    
+    setInvoiceItems(updated);
+  };
+
+  const handleProductSelect = (index, product) => {
+    const updated = [...invoiceItems];
+    if (product) {
+      updated[index].product_id = product.id;
+      updated[index].unit_price = Number(product.price) || 0;
+    } else {
+      updated[index].product_id = '';
+      updated[index].unit_price = 0;
+    }
     setInvoiceItems(updated);
   };
 
@@ -159,6 +183,7 @@ function Dashboard({ user, onLogout }) {
     try {
       const invoiceData = {
         ...formData,
+        invoice_date: today,
         client_id: user.client_id,
         status: 'pending',
         items: validItems
@@ -268,7 +293,7 @@ function Dashboard({ user, onLogout }) {
               </div>
             )}
 
-            <h3 style={{marginTop: '30px', marginBottom: '15px'}}>Товары</h3>
+            <h3 style={{marginTop: '30px', marginBottom: '15px', color: '#ffffff'}}>Товары</h3>
             <div className="card table-card">
               <table className="glass-table">
                 <thead>
@@ -292,7 +317,7 @@ function Dashboard({ user, onLogout }) {
               </table>
             </div>
 
-            <h3 style={{marginTop: '40px', marginBottom: '15px'}}>💬 Комментарии</h3>
+            <h3 style={{marginTop: '40px', marginBottom: '15px', color: '#ffffff'}}>Комментарии</h3>
             <Comments invoiceId={selectedInvoice.id} user={user} />
           </div>
         </div>
@@ -363,8 +388,8 @@ function Dashboard({ user, onLogout }) {
           </button>
         </div>
         
-        <div className="card table-card">
-          <table className="glass-table">
+        <div className="table-wrapper">
+          <table className="glass-table glass-table--compact">
             <thead>
               <tr>
                 <th>№ Накладной</th>
@@ -447,18 +472,21 @@ function Dashboard({ user, onLogout }) {
                     <input
                       type="date"
                       value={formData.invoice_date}
-                      onChange={(e) => setFormData({...formData, invoice_date: e.target.value})}
+                      onChange={() => {}}
+                      readOnly
+                      min={today}
+                      max={today}
                       required
                     />
                   </div>
 
                   <div className="form-group">
-                    <label>Желаемая дата доставки</label>
+                    <label>Желаемая дата доставки <span className="required">*</span></label>
                     <input
                       type="date"
                       value={formData.delivery_date}
                       onChange={(e) => setFormData({...formData, delivery_date: e.target.value})}
-                      placeholder="ДД.ММ.ГГГГ"
+                      required
                     />
                   </div>
                 </div>
@@ -489,18 +517,12 @@ function Dashboard({ user, onLogout }) {
                   {invoiceItems.map((item, index) => (
                     <div key={index} className="item-table-row">
                       <div className="item-col-product">
-                        <select
+                        <ProductSelector
+                          products={products}
                           value={item.product_id}
-                          onChange={(e) => updateInvoiceItem(index, 'product_id', e.target.value)}
-                          required
-                        >
-                          <option value="">Выберите товар</option>
-                          {products.map(p => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} - {p.price}₽/{p.unit}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(product) => handleProductSelect(index, product)}
+                          placeholder="Выберите товар"
+                        />
                       </div>
                       
                       <div className="item-col-qty">
@@ -584,3 +606,4 @@ function Dashboard({ user, onLogout }) {
 }
 
 export default Dashboard;
+
