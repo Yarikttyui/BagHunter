@@ -47,6 +47,45 @@ function buildStatusNotificationMessage(invoiceNumber, status) {
   return `\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f №${invoiceNumber}: ${STATUS_TEXT[status] || status}`;
 }
 
+async function notifyStaffAboutNewInvoice({ invoiceId, clientId, invoiceNumber, req }) {
+  try {
+    const [[client]] = await db.query('SELECT company_name FROM clients WHERE id = ?', [clientId]);
+    const clientName = client?.company_name || 'Клиент';
+    const [staffRows] = await db.query(
+      "SELECT id FROM users WHERE role IN ('admin', 'accountant')"
+    );
+
+    if (!staffRows.length) {
+      return;
+    }
+
+    const io = req.app.get('io');
+    const message = buildNewInvoiceNotificationMessage(clientName, invoiceNumber);
+
+    for (const staff of staffRows) {
+      const [notifResult] = await db.query(
+        'INSERT INTO notifications (user_id, type, title, message, invoice_id) VALUES (?, ?, ?, ?, ?)',
+        [staff.id, 'new_invoice', NOTIFICATION_TEXT.newInvoiceTitle, message, invoiceId]
+      );
+
+      if (io) {
+        io.to(`user_${staff.id}`).emit('new_notification', {
+          id: notifResult.insertId,
+          type: 'new_invoice',
+          title: NOTIFICATION_TEXT.newInvoiceTitle,
+          message,
+          link: `/invoices/${invoiceId}`,
+          invoice_id: invoiceId,
+          is_read: false,
+          created_at: new Date()
+        });
+      }
+    }
+  } catch (error) {
+    console.error('[invoices] failed to notify staff about new invoice:', error);
+  }
+}
+
 
 function canCurrentUserAccessInvoice(user, invoiceClientId) {
   if (!user || !user.role) {
@@ -389,44 +428,12 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
     }
   }
 
-  try {
-    const [client] = await db.query('SELECT company_name FROM clients WHERE id = ?', [targetClientId]);
-    const clientName = client[0]?.company_name || 'Клиент';
-
-    const [admins] = await db.query(
-      "SELECT id, username FROM users WHERE role IN ('admin', 'accountant')"
-    );
-
-    const io = req.app.get('io');
-
-    for (const admin of admins) {
-      const [notifResult] = await db.query(
-        'INSERT INTO notifications (user_id, type, title, message, invoice_id) VALUES (?, ?, ?, ?, ?)',
-        [
-          admin.id,
-          'new_invoice',
-          NOTIFICATION_TEXT.newInvoiceTitle,
-          buildNewInvoiceNotificationMessage(clientName, invoice_number),
-          invoiceId
-        ]
-      );
-
-      if (io) {
-        io.to(`user_${admin.id}`).emit('new_notification', {
-          id: notifResult.insertId,
-          type: 'new_invoice',
-          title: NOTIFICATION_TEXT.newInvoiceTitle,
-          message: buildNewInvoiceNotificationMessage(clientName, invoice_number),
-          link: `/invoice/${invoiceId}`,
-          invoice_id: invoiceId,
-          is_read: false,
-          created_at: new Date()
-        });
-      }
-    }
-  } catch (notificationError) {
-    console.error('[invoices] failed to notify admins about new invoice:', notificationError);
-  }
+  await notifyStaffAboutNewInvoice({
+    invoiceId,
+    clientId: targetClientId,
+    invoiceNumber: invoice_number,
+    req
+  });
 
   return res.status(201).json({ id: invoiceId, message: 'Накладная успешно создана' });
 });
@@ -529,14 +536,18 @@ router.put('/:id', requireRole('admin', 'accountant'), async (req, res) => {
 
         const io = req.app.get('io');
         if (io) {
-          io.to(`user_${targetUserId}`).emit('new_notification', {
+          const payload = {
             id: notifResult.insertId,
             type: 'invoice_status',
             title: NOTIFICATION_TEXT.statusUpdatedTitle,
             message: buildStatusNotificationMessage(updatedNumber, nextStatus),
             link: `/invoices/${req.params.id}`,
+            invoice_id: Number(req.params.id),
             is_read: false,
             created_at: new Date()
+          };
+          io.to(`user_${targetUserId}`).emit('new_notification', {
+            ...payload
           });
         }
       }

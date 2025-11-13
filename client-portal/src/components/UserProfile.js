@@ -184,10 +184,18 @@ function UserProfile({ user, onUpdate }) {
           <h2>{profile.full_name || user.username}</h2>
           <p>{profile.position || "Должность не указана"}</p>
           <div className="profile-actions">
-            <button type="button" onClick={() => setShowPasswordChange(true)}>
+            <button
+              type="button"
+              className="profile-action-btn profile-action-btn--primary"
+              onClick={() => setShowPasswordChange(true)}
+            >
               Сменить пароль
             </button>
-            <button type="button" onClick={() => setEditing(true)}>
+            <button
+              type="button"
+              className="profile-action-btn profile-action-btn--ghost"
+              onClick={() => setEditing(true)}
+            >
               Редактировать
             </button>
           </div>

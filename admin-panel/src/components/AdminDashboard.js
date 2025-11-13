@@ -701,8 +701,13 @@ const downloadInvoicePdf = async (invoiceId) => {
           id: 'invoices',
           title: 'Всего накладных',
           value: stats.invoices?.total_invoices || 0,
-          label: `Доставлено: ${stats.invoices?.delivered || 0} | В пути: ${stats.invoices?.in_transit || 0} | Ожидают: ${stats.invoices?.pending || 0} | Отменены: ${stats.invoices?.cancelled || 0}`,
-          color: '#17a2b8'
+          color: '#17a2b8',
+          segments: [
+            { label: 'Доставлено', value: stats.invoices?.delivered || 0, color: '#28a745' },
+            { label: 'В пути', value: stats.invoices?.in_transit || 0, color: '#17a2b8' },
+            { label: 'Ожидают', value: stats.invoices?.pending || 0, color: '#facc15' },
+            { label: 'Отменены', value: stats.invoices?.cancelled || 0, color: '#f87171' }
+          ]
         }
       ]
     : [];
@@ -1470,7 +1475,22 @@ const downloadInvoicePdf = async (invoiceId) => {
                   <div key={card.id} className="stat-card">
                     <h3>{card.title}</h3>
                     <div className="value" style={{color: card.color}}>{card.value}</div>
-                    {card.label && <div className="label">{card.label}</div>}
+                    {card.segments ? (
+                      <div className="label label--inline">
+                        {card.segments.map((segment, index) => (
+                          <React.Fragment key={`${card.id}-${segment.label}`}>
+                            <span style={{color: segment.color}}>
+                              {segment.label}: {segment.value}
+                            </span>
+                            {index < card.segments.length - 1 && (
+                              <span className="label-separator">|</span>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    ) : (
+                      card.label && <div className="label">{card.label}</div>
+                    )}
                   </div>
                 ))}
               </div>

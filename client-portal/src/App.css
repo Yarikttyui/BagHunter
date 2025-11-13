@@ -431,20 +431,25 @@
 
 .back-btn {
   margin: 20px 0;
-  padding: 10px 20px;
-  background: #667eea;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(102, 126, 234, 0.35) 100%);
   color: white;
-  border: none;
-  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.3px;
 }
 
 .back-btn:hover {
-  background: #5568d3;
-  transform: translateX(-3px);
+  transform: translateX(-4px);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
 }
 
 .modal-overlay {

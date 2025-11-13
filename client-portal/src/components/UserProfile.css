@@ -83,17 +83,22 @@
 }
 
 .avatar-upload-btn {
-  padding: 10px 20px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
+  padding: 10px 22px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(147, 197, 253, 0.4) 100%);
+  backdrop-filter: blur(12px);
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 24px;
-  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
 }
 
 .avatar-upload-btn input {
@@ -101,10 +106,9 @@
 }
 
 .avatar-upload-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 8px 20px rgba(147, 197, 253, 0.4);
 }
 
 .profile-info {
@@ -118,6 +122,51 @@
   font-size: 32px;
   font-weight: 700;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.profile-action-btn {
+  padding: 12px 24px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.profile-action-btn--primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.35);
+}
+
+.profile-action-btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(102, 126, 234, 0.5);
+}
+
+.profile-action-btn--ghost {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+}
+
+.profile-action-btn--ghost:hover {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
 }
 
 .profile-details {
@@ -303,27 +352,6 @@
   background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(23, 162, 184, 0.5);
-}
-
-.back-btn {
-  padding: 12px 24px;
-  background: linear-gradient(135deg, rgba(108, 117, 125, 0.3) 0%, rgba(90, 98, 104, 0.3) 100%);
-  backdrop-filter: blur(10px);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-  margin-bottom: 20px;
-}
-
-.back-btn:hover {
-  background: linear-gradient(135deg, rgba(108, 117, 125, 0.5) 0%, rgba(90, 98, 104, 0.5) 100%);
-  border-color: rgba(255, 255, 255, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .edit-btn {
