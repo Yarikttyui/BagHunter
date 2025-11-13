@@ -361,6 +361,7 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
   let connection;
   let invoiceId;
   let targetClientId = null;
+  let invoiceNumberPayload = null;
 
   try {
     const currentUser = req.user || {};
@@ -373,6 +374,7 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
       notes,
       items
     } = req.body;
+    invoiceNumberPayload = invoice_number;
 
     if (!delivery_date) {
       return res.status(400).json({ error: 'Желаемая дата доставки обязательна' });
@@ -469,10 +471,12 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
     }
   }
 
+  const safeInvoiceNumber = invoiceNumberPayload || `INV-${invoiceId}`;
+
   await notifyStaffAboutNewInvoice({
     invoiceId,
     clientId: targetClientId,
-    invoiceNumber: invoice_number,
+    invoiceNumber: safeInvoiceNumber,
     req,
     initiatorRole: req.user?.role
   });
