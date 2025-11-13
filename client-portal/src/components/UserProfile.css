@@ -96,6 +96,10 @@
   white-space: nowrap;
 }
 
+.avatar-upload-btn input {
+  display: none;
+}
+
 .avatar-upload-btn:hover {
   background: rgba(255, 255, 255, 0.3);
   border-color: rgba(255, 255, 255, 0.5);
@@ -114,6 +118,13 @@
   font-size: 32px;
   font-weight: 700;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.profile-details {
+  padding: 30px 40px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .role-badge {

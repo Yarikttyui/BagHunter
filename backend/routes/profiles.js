@@ -104,7 +104,7 @@ router.put('/:userId', async (req, res) => {
       );
     }
 
-    console.log(`✅ Профиль пользователя #${userId} обновлён`);
+    console.log(`[profiles] Профиль пользователя #${userId} обновлён`);
 
     res.json({
       success: true,
@@ -145,7 +145,7 @@ router.post('/:userId/avatar', upload.single('avatar'), async (req, res) => {
       );
     }
 
-    console.log(`✅ Аватар загружен для пользователя #${userId}: ${avatarPath}`);
+    console.log(`[profiles] Аватар загружен для пользователя #${userId}: ${avatarPath}`);
 
     res.json({
       success: true,
@@ -193,7 +193,7 @@ router.post('/:userId/change-password', async (req, res) => {
       [hashedPassword, userId]
     );
 
-    console.log(`✅ Пароль изменён для пользователя #${userId}`);
+    console.log(`[profiles] Пароль изменён для пользователя #${userId}`);
 
     res.json({
       success: true,

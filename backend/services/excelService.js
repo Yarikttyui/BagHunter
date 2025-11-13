@@ -13,7 +13,7 @@ async function generateFinancialReportExcel(reportData, res) {
 
     summarySheet.mergeCells('A1:E1');
     const titleCell = summarySheet.getCell('A1');
-    titleCell.value = '📊 ФИНАНСОВЫЙ ОТЧЕТ';
+    titleCell.value = 'ФИНАНСОВЫЙ ОТЧЕТ';
     titleCell.font = { size: 18, bold: true, color: { argb: '667eea' } };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     summarySheet.getRow(1).height = 30;
@@ -35,27 +35,35 @@ async function generateFinancialReportExcel(reportData, res) {
       fgColor: { argb: '667eea' }
     };
 
-    summarySheet.addRow(['💰 Общий доход', formatCurrency(reportData.income || 0)]);
-    summarySheet.addRow(['📉 Общие расходы', formatCurrency(reportData.expense || 0)]);
-    summarySheet.addRow(['💵 Чистая прибыль', formatCurrency(reportData.profit || 0)]);
-    summarySheet.addRow(['📋 Всего накладных', reportData.invoices?.total_invoices || 0]);
-    summarySheet.addRow(['✅ Доставлено', reportData.invoices?.delivered || 0]);
-    summarySheet.addRow(['🚚 В пути', reportData.invoices?.in_transit || 0]);
-    summarySheet.addRow(['⏳ Ожидает', reportData.invoices?.pending || 0]);
-    summarySheet.addRow(['💸 Сумма накладных', formatCurrency(reportData.invoices?.total_amount || 0)]);
+    summarySheet.addRow(['Общий доход', formatCurrency(reportData.income || 0)]);
+    summarySheet.addRow(['Общие расходы', formatCurrency(reportData.expense || 0)]);
+    summarySheet.addRow(['Чистая прибыль', formatCurrency(reportData.profit || 0)]);
+    summarySheet.addRow(['Всего накладных', reportData.invoices?.total_invoices || 0]);
+    summarySheet.addRow(['Доставлено', reportData.invoices?.delivered || 0]);
+    summarySheet.addRow(['В пути', reportData.invoices?.in_transit || 0]);
+    summarySheet.addRow(['Ожидает', reportData.invoices?.pending || 0]);
+    summarySheet.addRow(['Отменено', reportData.invoices?.cancelled || 0]);
+    summarySheet.addRow(['Сумма накладных', formatCurrency(reportData.invoices?.total_amount || 0)]);
 
-    for (let i = 5; i <= 12; i++) {
+    for (let i = 5; i <= 13; i++) {
       const row = summarySheet.getRow(i);
       row.getCell(1).font = { bold: true };
-      if (i === 7) {
-        row.getCell(2).font = { bold: true, color: { argb: i === 5 ? '28a745' : (i === 6 ? 'dc3545' : '667eea') } };
+      const valueCell = row.getCell(2);
+      if (i === 5) {
+        valueCell.font = { bold: true, color: { argb: '28a745' } };
+      } else if (i === 6) {
+        valueCell.font = { bold: true, color: { argb: 'dc3545' } };
+      } else if (i === 7) {
+        valueCell.font = { bold: true, color: { argb: reportData.profit >= 0 ? '28a745' : 'dc3545' } };
+      } else {
+        valueCell.font = { bold: true, color: { argb: '667eea' } };
       }
     }
 
     summarySheet.getColumn(1).width = 25;
     summarySheet.getColumn(2).width = 20;
 
-    ['A4', 'B4', 'A5', 'B5', 'A6', 'B6', 'A7', 'B7', 'A8', 'B8', 'A9', 'B9', 'A10', 'B10', 'A11', 'B11', 'A12', 'B12'].forEach(cell => {
+    ['A4', 'B4', 'A5', 'B5', 'A6', 'B6', 'A7', 'B7', 'A8', 'B8', 'A9', 'B9', 'A10', 'B10', 'A11', 'B11', 'A12', 'B12', 'A13', 'B13'].forEach(cell => {
       summarySheet.getCell(cell).border = {
         top: { style: 'thin' },
         left: { style: 'thin' },
@@ -89,7 +97,7 @@ async function generateFinancialReportExcel(reportData, res) {
       reportData.transactions.forEach(trans => {
         transSheet.addRow({
           id: trans.id,
-          type: trans.transaction_type === 'income' ? '📈 Доход' : '📉 Расход',
+          type: trans.transaction_type === 'income' ? 'Доход' : 'Расход',
           amount: formatCurrency(trans.amount),
           date: formatDate(trans.transaction_date),
           method: trans.payment_method,
@@ -239,10 +247,10 @@ function formatCurrency(amount) {
 
 function getStatusText(status) {
   const statuses = {
-    pending: '⏳ Ожидает',
-    in_transit: '🚚 В пути',
-    delivered: '✅ Доставлено',
-    cancelled: '❌ Отменено'
+    pending: 'Ожидает',
+    in_transit: 'В пути',
+    delivered: 'Доставлено',
+    cancelled: 'Отменено'
   };
   return statuses[status] || status;
 }

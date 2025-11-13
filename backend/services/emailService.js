@@ -13,9 +13,9 @@ const transporter = nodemailer.createTransport({
 
 transporter.verify(function(error, success) {
   if (error) {
-    console.log('❌ Почтовый сервис недоступен:', error.message);
+    console.log('[mail] Почтовый сервис недоступен:', error.message);
   } else {
-    console.log('✅ Почтовый сервис готов к отправке сообщений');
+    console.log('[mail] Почтовый сервис готов к отправке сообщений');
   }
 });
 
@@ -28,17 +28,10 @@ async function sendInvoiceStatusEmail(invoiceData, clientEmail, newStatus) {
     cancelled: 'Отменён'
   };
 
-  const statusEmoji = {
-    pending: '⏳',
-    in_transit: '🚚',
-    delivered: '✅',
-    cancelled: '❌'
-  };
-
   const mailOptions = {
     from: `"Логистическая система" <${process.env.EMAIL_USER}>`,
     to: clientEmail,
-    subject: `${statusEmoji[newStatus]} Статус накладной №${invoiceData.invoice_number} обновлён`,
+    subject: `Статус накладной №${invoiceData.invoice_number} обновлён`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -61,22 +54,22 @@ async function sendInvoiceStatusEmail(invoiceData, clientEmail, newStatus) {
       <body>
         <div class="container">
           <div class="header">
-            <h1>🚚 Обновление статуса доставки</h1>
+            <h1> Обновление статуса доставки</h1>
           </div>
           <div class="content">
             <p>Здравствуйте!</p>
             <p>Мы зафиксировали обновление по накладной <strong>№${invoiceData.invoice_number}</strong>:</p>
             
             <div class="status ${newStatus}">
-              ${statusEmoji[newStatus]} ${statusText[newStatus]}
+              ${statusText[newStatus]}
             </div>
             
             <div class="info-box">
               <strong>Ключевые данные:</strong><br>
-              📅 Дата оформления: ${new Date(invoiceData.invoice_date).toLocaleDateString('ru-RU')}<br>
-              💰 Итоговая сумма: ${Number(invoiceData.total_amount || 0).toLocaleString('ru-RU')} ₽<br>
-              ${invoiceData.delivery_date ? `🚚 Плановая доставка: ${new Date(invoiceData.delivery_date).toLocaleDateString('ru-RU')}<br>` : ''}
-              ${invoiceData.notes ? `📝 Комментарий менеджера: ${invoiceData.notes}` : ''}
+              Дата оформления: Дата оформления: ${new Date(invoiceData.invoice_date).toLocaleDateString('ru-RU')}<br>
+              Сумма: Итоговая сумма: ${Number(invoiceData.total_amount || 0).toLocaleString('ru-RU')} ₽<br>
+              ${invoiceData.delivery_date ? ` Плановая доставка: ${new Date(invoiceData.delivery_date).toLocaleDateString('ru-RU')}<br>` : ''}
+              ${invoiceData.notes ? `Комментарий менеджера: Комментарий менеджера: ${invoiceData.notes}` : ''}
             </div>
             
             <p>Чтобы просмотреть подробности, перейдите в личный кабинет:</p>
@@ -95,10 +88,10 @@ async function sendInvoiceStatusEmail(invoiceData, clientEmail, newStatus) {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Письмо со статусом накладной отправлено:', info.messageId);
+    console.log(' Письмо со статусом накладной отправлено:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ Не удалось отправить письмо:', error);
+    console.error(' Не удалось отправить письмо:', error);
     return { success: false, error: error.message };
   }
 }
@@ -108,7 +101,7 @@ async function sendNewInvoiceNotification(invoiceData, accountantEmails) {
   const mailOptions = {
     from: `"Логистическая система" <${process.env.EMAIL_USER}>`,
     to: accountantEmails.join(', '),
-    subject: `📋 Накладная №${invoiceData.invoice_number} ожидает проверки`,
+    subject: `Накладная №${invoiceData.invoice_number} ожидает проверки`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -125,7 +118,7 @@ async function sendNewInvoiceNotification(invoiceData, accountantEmails) {
       <body>
         <div class="container">
           <div class="header">
-            <h1>⚠️ Новая накладная на проверке</h1>
+            <h1>Внимание: Новая накладная на проверке</h1>
           </div>
           <div class="content">
             <div class="alert">
@@ -148,10 +141,10 @@ async function sendNewInvoiceNotification(invoiceData, accountantEmails) {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Письмо бухгалтерам отправлено:', info.messageId);
+    console.log(' Письмо бухгалтерам отправлено:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ Не удалось отправить уведомление:', error);
+    console.error(' Не удалось отправить уведомление:', error);
     return { success: false, error: error.message };
   }
 }
@@ -161,9 +154,9 @@ async function sendTestEmail(toEmail) {
   const mailOptions = {
     from: `"Логистическая система" <${process.env.EMAIL_USER}>`,
     to: toEmail,
-    subject: '✅ Проверка почтового сервиса',
+    subject: ' Проверка почтового сервиса',
     html: `
-      <h2>🎉 Поздравляем!</h2>
+      <h2>Поздравляем!  Поздравляем!</h2>
       <p>Почтовый сервис настроен корректно и готов работать.</p>
       <p>Теперь система сможет автоматически уведомлять пользователей.</p>
     `
@@ -171,10 +164,10 @@ async function sendTestEmail(toEmail) {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Тестовое письмо отправлено:', info.messageId);
+    console.log(' Тестовое письмо отправлено:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ Не удалось отправить тестовое письмо:', error);
+    console.error(' Не удалось отправить тестовое письмо:', error);
     return { success: false, error: error.message };
   }
 }

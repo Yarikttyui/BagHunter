@@ -19,6 +19,16 @@
 .activity-header h2 {
   margin: 0;
   font-size: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
 }
 
 .activity-controls {

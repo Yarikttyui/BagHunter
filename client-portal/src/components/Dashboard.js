@@ -1,11 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import NotificationBell from './NotificationBell';
-import UserProfile from './UserProfile';
-import Comments from './Comments';
-import ColorBends from './ColorBends';
-import ProductSelector from './ProductSelector';
-import { API_BASE_URL } from '../config/api';
+import React, { useState, useEffect, useCallback } from "react";
+import axios from "axios";
+import NotificationBell from "./NotificationBell";
+import UserProfile from "./UserProfile";
+import Comments from "./Comments";
+import ColorBends from "./ColorBends";
+import ProductSelector from "./ProductSelector";
+import {
+  FiUser,
+  FiX,
+  FiFileText,
+  FiBox,
+  FiTrash2,
+  FiPlus,
+} from "react-icons/fi";
+import { API_BASE_URL } from "../config/api";
 
 const API_URL = API_BASE_URL;
 
@@ -27,14 +35,16 @@ function Dashboard({ user, onLogout }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [products, setProducts] = useState([]);
-  const [invoiceItems, setInvoiceItems] = useState([{ product_id: '', quantity: 1, unit_price: 0 }]);
-  const today = new Date().toISOString().split('T')[0];
+  const [invoiceItems, setInvoiceItems] = useState([
+    { product_id: "", quantity: 1, unit_price: 0 },
+  ]);
+  const today = new Date().toISOString().split("T")[0];
   const [formData, setFormData] = useState({
-    invoice_number: '',
+    invoice_number: "",
     invoice_date: today,
     delivery_date: today,
-    notes: '',
-    items: []
+    notes: "",
+    items: [],
   });
 
   useEffect(() => {
@@ -46,66 +56,82 @@ function Dashboard({ user, onLogout }) {
       const [invoicesRes, statsRes, productsRes] = await Promise.all([
         axios.get(`${API_URL}/invoices`),
         axios.get(`${API_URL}/reports/stats`),
-        axios.get(`${API_URL}/products?includeInactive=true`)
+        axios.get(`${API_URL}/products?includeInactive=true`),
       ]);
 
       setInvoices(normalizeListResponse(invoicesRes.data));
       setStats(statsRes.data);
       setProducts(productsRes.data);
     } catch (error) {
-      console.error('Ошибка загрузки данных:', error);
+      console.error("Ошибка загрузки данных:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchInvoiceDetails = async (id) => {
+  const fetchInvoiceDetails = useCallback(async (id) => {
+    if (!id) {
+      return;
+    }
     try {
       const response = await axios.get(`${API_URL}/invoices/${id}`);
       setSelectedInvoice(response.data);
     } catch (error) {
-      console.error('Ошибка загрузки накладной:', error);
+      console.error("Ошибка загрузки накладной:", error);
     }
-  };
+  }, []);
+
+  const handleNotificationNavigate = useCallback(
+    (invoiceId) => {
+      if (!invoiceId) {
+        return;
+      }
+      setShowProfile(false);
+      fetchInvoiceDetails(invoiceId);
+    },
+    [fetchInvoiceDetails],
+  );
 
   const getStatusText = (status) => {
     const statuses = {
-      pending: 'Ожидает',
-      in_transit: 'В пути',
-      delivered: 'Доставлено',
-      cancelled: 'Отменено'
+      pending: "Ожидает",
+      in_transit: "В пути",
+      delivered: "Доставлено",
+      cancelled: "Отменено",
     };
     return statuses[status] || status;
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('ru-RU');
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString("ru-RU");
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB'
+    return new Intl.NumberFormat("ru-RU", {
+      style: "currency",
+      currency: "RUB",
     }).format(amount);
   };
 
   const handleCreateInvoice = () => {
     const invoiceNumber = `INV-${Date.now()}`;
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     setFormData({
       invoice_number: invoiceNumber,
       invoice_date: today,
       delivery_date: today,
-      notes: '',
-      items: []
+      notes: "",
     });
-    setInvoiceItems([{ product_id: '', quantity: 1, unit_price: 0 }]);
+    setInvoiceItems([{ product_id: "", quantity: 1, unit_price: 0 }]);
     setShowCreateModal(true);
   };
 
   const addInvoiceItem = () => {
-    setInvoiceItems([...invoiceItems, { product_id: '', quantity: 1, unit_price: 0 }]);
+    setInvoiceItems([
+      ...invoiceItems,
+      { product_id: "", quantity: 1, unit_price: 0 },
+    ]);
   };
 
   const removeInvoiceItem = (index) => {
@@ -116,9 +142,9 @@ function Dashboard({ user, onLogout }) {
 
   const updateInvoiceItem = (index, field, value) => {
     const updated = [...invoiceItems];
-    if (field === 'quantity') {
+    if (field === "quantity") {
       updated[index].quantity = value;
-    } else if (field === 'unit_price') {
+    } else if (field === "unit_price") {
       updated[index].unit_price = value;
     } else {
       updated[index][field] = value;
@@ -132,7 +158,7 @@ function Dashboard({ user, onLogout }) {
       updated[index].product_id = product.id;
       updated[index].unit_price = Number(product.price) || 0;
     } else {
-      updated[index].product_id = '';
+      updated[index].product_id = "";
       updated[index].unit_price = 0;
     }
     setInvoiceItems(updated);
@@ -140,71 +166,61 @@ function Dashboard({ user, onLogout }) {
 
   const calculateTotal = () => {
     return invoiceItems.reduce((sum, item) => {
-      return sum + (parseFloat(item.quantity || 0) * parseFloat(item.unit_price || 0));
+      return (
+        sum + parseFloat(item.quantity || 0) * parseFloat(item.unit_price || 0)
+      );
     }, 0);
-  };
-
-  const addItem = () => {
-    setFormData({
-      ...formData,
-      items: [...formData.items, { product_name: '', quantity: '', unit_price: '' }]
-    });
-  };
-
-  const removeItem = (index) => {
-    const newItems = formData.items.filter((_, i) => i !== index);
-    setFormData({ ...formData, items: newItems });
-  };
-
-  const updateItem = (index, field, value) => {
-    const newItems = [...formData.items];
-    newItems[index][field] = value;
-    setFormData({ ...formData, items: newItems });
   };
 
   const submitInvoice = async (e) => {
     e.preventDefault();
-    
+
     if (!user.client_id) {
-      alert('Ошибка: client_id не найден. Пожалуйста, обратитесь к администратору.');
-      console.error('User object:', user);
+      alert("Ошибка: client_id не найден. Обратитесь к администратору.");
+      console.error("User object:", user);
       return;
     }
 
-    const validItems = invoiceItems.filter(item => 
-      item.product_id && item.quantity > 0 && item.unit_price > 0
+    const validItems = invoiceItems.filter(
+      (item) => item.product_id && item.quantity > 0 && item.unit_price > 0,
     );
 
     if (validItems.length === 0) {
-      alert('Пожалуйста, добавьте хотя бы один товар');
+      alert("Добавьте хотя бы одну позицию с корректными данными.");
       return;
     }
-    
+
     try {
       const invoiceData = {
         ...formData,
         invoice_date: today,
         client_id: user.client_id,
-        status: 'pending',
-        items: validItems
+        status: "pending",
+        items: validItems,
       };
-      
-      console.log('Отправка накладной:', invoiceData);
-      
+
       await axios.post(`${API_URL}/invoices`, invoiceData);
-      
+
       setShowCreateModal(false);
       fetchData();
-      alert('Накладная успешно создана! Ожидает проверки бухгалтера.');
+      alert(
+        "Накладная успешно создана. Менеджер подтвердит её в ближайшее время.",
+      );
     } catch (error) {
-      console.error('Ошибка создания накладной:', error);
-      console.error('Response:', error.response?.data);
-      alert(`Ошибка при создании накладной: ${error.response?.data?.error || error.message}`);
+      console.error("Ошибка создания накладной:", error);
+      console.error("Response:", error.response?.data);
+      alert(
+        `Ошибка при создании накладной: ${error.response?.data?.error || error.message}`,
+      );
     }
   };
 
   if (loading) {
-    return <div className="container"><h2>Загрузка...</h2></div>;
+    return (
+      <div className="container">
+        <h2>Загрузка...</h2>
+      </div>
+    );
   }
 
   if (showProfile) {
@@ -214,11 +230,17 @@ function Dashboard({ user, onLogout }) {
           <div className="admin-header-content">
             <h1>Клиентская панель - Профиль</h1>
             <div className="header-right">
-              <NotificationBell user={user} />
-              <span className="user-info active" style={{cursor: 'default'}}>
-                👤 {user.username}
+              <NotificationBell
+                user={user}
+                onNotificationClick={handleNotificationNavigate}
+              />
+              <span className="user-info active" style={{ cursor: "default" }}>
+                <FiUser className="inline-icon" aria-hidden="true" />
+                {user.username}
               </span>
-              <button onClick={onLogout} className="logout-btn">Выйти</button>
+              <button onClick={onLogout} className="logout-btn">
+                Выйти
+              </button>
             </div>
           </div>
         </div>
@@ -239,10 +261,24 @@ function Dashboard({ user, onLogout }) {
         <div className="header">
           <h1>Клиентская панель</h1>
           <div className="header-right">
-            <span className="user-info" onClick={() => { setSelectedInvoice(null); setShowProfile(true); }} style={{cursor: 'pointer'}}>
-              👤 {user.username}
+            <NotificationBell
+              user={user}
+              onNotificationClick={handleNotificationNavigate}
+            />
+            <span
+              className="user-info"
+              onClick={() => {
+                setSelectedInvoice(null);
+                setShowProfile(true);
+              }}
+              style={{ cursor: "pointer" }}
+            >
+              <FiUser className="inline-icon" aria-hidden="true" />
+              {user.username}
             </span>
-            <button onClick={onLogout} className="logout-btn">Выйти</button>
+            <button onClick={onLogout} className="logout-btn">
+              Выйти
+            </button>
           </div>
         </div>
 
@@ -266,34 +302,48 @@ function Dashboard({ user, onLogout }) {
               </div>
               <div className="info-item">
                 <div className="info-label">Email</div>
-                <div className="info-value">{selectedInvoice.email || '-'}</div>
+                <div className="info-value">{selectedInvoice.email || "-"}</div>
               </div>
               <div className="info-item">
                 <div className="info-label">Телефон</div>
-                <div className="info-value">{selectedInvoice.phone || '-'}</div>
+                <div className="info-value">{selectedInvoice.phone || "-"}</div>
               </div>
               <div className="info-item">
                 <div className="info-label">Дата накладной</div>
-                <div className="info-value">{formatDate(selectedInvoice.invoice_date)}</div>
+                <div className="info-value">
+                  {formatDate(selectedInvoice.invoice_date)}
+                </div>
               </div>
               <div className="info-item">
                 <div className="info-label">Дата доставки</div>
-                <div className="info-value">{formatDate(selectedInvoice.delivery_date)}</div>
+                <div className="info-value">
+                  {formatDate(selectedInvoice.delivery_date)}
+                </div>
               </div>
               <div className="info-item">
                 <div className="info-label">Общая сумма</div>
-                <div className="info-value">{formatCurrency(selectedInvoice.total_amount)}</div>
+                <div className="info-value">
+                  {formatCurrency(selectedInvoice.total_amount)}
+                </div>
               </div>
             </div>
 
             {selectedInvoice.notes && (
-              <div style={{marginTop: '20px'}}>
+              <div style={{ marginTop: "20px" }}>
                 <div className="info-label">Примечания</div>
                 <div className="info-value">{selectedInvoice.notes}</div>
               </div>
             )}
 
-            <h3 style={{marginTop: '30px', marginBottom: '15px', color: '#ffffff'}}>Товары</h3>
+            <h3
+              style={{
+                marginTop: "30px",
+                marginBottom: "15px",
+                color: "#ffffff",
+              }}
+            >
+              Товары
+            </h3>
             <div className="card table-card">
               <table className="glass-table">
                 <thead>
@@ -302,22 +352,31 @@ function Dashboard({ user, onLogout }) {
                     <th>Количество</th>
                     <th>Цена за единицу</th>
                     <th>Сумма</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedInvoice.items && selectedInvoice.items.map(item => (
-                  <tr key={item.id}>
-                    <td>{item.product_name}</td>
-                    <td>{item.quantity}</td>
-                    <td>{formatCurrency(item.unit_price)}</td>
-                    <td>{formatCurrency(item.total_price)}</td>
                   </tr>
-                ))}
+                </thead>
+                <tbody>
+                  {selectedInvoice.items &&
+                    selectedInvoice.items.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.product_name}</td>
+                        <td>{item.quantity}</td>
+                        <td>{formatCurrency(item.unit_price)}</td>
+                        <td>{formatCurrency(item.total_price)}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
 
-            <h3 style={{marginTop: '40px', marginBottom: '15px', color: '#ffffff'}}>Комментарии</h3>
+            <h3
+              style={{
+                marginTop: "40px",
+                marginBottom: "15px",
+                color: "#ffffff",
+              }}
+            >
+              Комментарии
+            </h3>
             <Comments invoiceId={selectedInvoice.id} user={user} />
           </div>
         </div>
@@ -338,17 +397,35 @@ function Dashboard({ user, onLogout }) {
         parallax={0.4}
         noise={0.05}
         transparent
-        style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0 }}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          zIndex: 0,
+        }}
       />
       <div className="admin-header">
         <div className="admin-header-content">
           <h1>Клиентская панель</h1>
           <div className="header-right">
-            <NotificationBell user={user} />
-            <span className="user-info" onClick={() => setShowProfile(true)} style={{cursor: 'pointer'}} title="Перейти в профиль">
-              👤 {user.username}
+            <NotificationBell
+              user={user}
+              onNotificationClick={handleNotificationNavigate}
+            />
+            <span
+              className="user-info"
+              onClick={() => setShowProfile(true)}
+              style={{ cursor: "pointer" }}
+              title="Перейти в профиль"
+            >
+              <FiUser className="inline-icon" aria-hidden="true" />
+              {user.username}
             </span>
-            <button onClick={onLogout} className="logout-btn">Выйти</button>
+            <button onClick={onLogout} className="logout-btn">
+              Выйти
+            </button>
           </div>
         </div>
       </div>
@@ -363,19 +440,29 @@ function Dashboard({ user, onLogout }) {
             <div className="stat-card">
               <h3>В обработке</h3>
               <div className="stat-value">
-                {invoices.filter(inv => inv.status === 'pending' || inv.status === 'in_transit').length}
+                {
+                  invoices.filter(
+                    (inv) =>
+                      inv.status === "pending" || inv.status === "in_transit",
+                  ).length
+                }
               </div>
             </div>
             <div className="stat-card">
               <h3>Доставлено</h3>
               <div className="stat-value">
-                {invoices.filter(inv => inv.status === 'delivered').length}
+                {invoices.filter((inv) => inv.status === "delivered").length}
               </div>
             </div>
             <div className="stat-card">
               <h3>Общая сумма</h3>
               <div className="stat-value">
-                {formatCurrency(invoices.reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0))}
+                {formatCurrency(
+                  invoices.reduce(
+                    (sum, inv) => sum + parseFloat(inv.total_amount || 0),
+                    0,
+                  ),
+                )}
               </div>
             </div>
           </div>
@@ -387,7 +474,7 @@ function Dashboard({ user, onLogout }) {
             Создать накладную
           </button>
         </div>
-        
+
         <div className="table-wrapper">
           <table className="glass-table glass-table--compact">
             <thead>
@@ -404,12 +491,15 @@ function Dashboard({ user, onLogout }) {
             <tbody>
               {invoices.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={{textAlign: 'center', padding: '30px'}}>
+                  <td
+                    colSpan="7"
+                    style={{ textAlign: "center", padding: "30px" }}
+                  >
                     Нет накладных
                   </td>
                 </tr>
               ) : (
-                invoices.map(invoice => (
+                invoices.map((invoice) => (
                   <tr key={invoice.id}>
                     <td>{invoice.invoice_number}</td>
                     <td>{invoice.client_name}</td>
@@ -422,9 +512,13 @@ function Dashboard({ user, onLogout }) {
                       </span>
                     </td>
                     <td>
-                      <button 
+                      <button
                         onClick={() => fetchInvoiceDetails(invoice.id)}
-                        style={{background: '#667eea', color: 'white', padding: '6px 12px'}}
+                        style={{
+                          background: "#667eea",
+                          color: "white",
+                          padding: "6px 12px",
+                        }}
                       >
                         Подробнее
                       </button>
@@ -437,25 +531,33 @@ function Dashboard({ user, onLogout }) {
         </div>
       </div>
 
-      
       {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="modal-invoice-create" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-overlay"
+          onClick={() => setShowCreateModal(false)}
+        >
+          <div
+            className="modal-invoice-create"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header-invoice">
               <h2>Создать новую накладную</h2>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="modal-close-btn"
                 onClick={() => setShowCreateModal(false)}
                 title="Закрыть"
               >
-                ✕
+                <FiX aria-hidden="true" />
               </button>
             </div>
-            
+
             <form onSubmit={submitInvoice} className="invoice-form">
               <div className="invoice-form-section">
-                <h3 className="section-subtitle">📋 Основная информация</h3>
+                <h3 className="section-subtitle">
+                  <FiFileText className="inline-icon" aria-hidden="true" />
+                  Основная информация
+                </h3>
                 <div className="form-grid-3col">
                   <div className="form-group">
                     <label>Номер накладной</label>
@@ -468,7 +570,9 @@ function Dashboard({ user, onLogout }) {
                   </div>
 
                   <div className="form-group">
-                    <label>Дата накладной <span className="required">*</span></label>
+                    <label>
+                      Дата накладной <span className="required">*</span>
+                    </label>
                     <input
                       type="date"
                       value={formData.invoice_date}
@@ -481,11 +585,18 @@ function Dashboard({ user, onLogout }) {
                   </div>
 
                   <div className="form-group">
-                    <label>Желаемая дата доставки <span className="required">*</span></label>
+                    <label>
+                      Желаемая дата доставки <span className="required">*</span>
+                    </label>
                     <input
                       type="date"
                       value={formData.delivery_date}
-                      onChange={(e) => setFormData({...formData, delivery_date: e.target.value})}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          delivery_date: e.target.value,
+                        })
+                      }
                       required
                     />
                   </div>
@@ -495,7 +606,9 @@ function Dashboard({ user, onLogout }) {
                   <label>Примечания</label>
                   <textarea
                     value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                    onChange={(e) =>
+                      setFormData({ ...formData, notes: e.target.value })
+                    }
                     rows="2"
                     placeholder="Дополнительная информация о заказе"
                   />
@@ -503,8 +616,11 @@ function Dashboard({ user, onLogout }) {
               </div>
 
               <div className="invoice-form-section">
-                <h3 className="section-subtitle">📦 Товары <span className="required">*</span></h3>
-                
+                <h3 className="section-subtitle">
+                  <FiBox className="inline-icon" aria-hidden="true" />
+                  Товары <span className="required">*</span>
+                </h3>
+
                 <div className="invoice-items-table">
                   <div className="items-table-header">
                     <div className="item-col-product">Товар</div>
@@ -513,48 +629,61 @@ function Dashboard({ user, onLogout }) {
                     <div className="item-col-total">Сумма</div>
                     <div className="item-col-actions">Действия</div>
                   </div>
-                  
+
                   {invoiceItems.map((item, index) => (
                     <div key={index} className="item-table-row">
                       <div className="item-col-product">
                         <ProductSelector
                           products={products}
                           value={item.product_id}
-                          onChange={(product) => handleProductSelect(index, product)}
+                          onChange={(product) =>
+                            handleProductSelect(index, product)
+                          }
                           placeholder="Выберите товар"
                         />
                       </div>
-                      
+
                       <div className="item-col-qty">
                         <input
                           type="number"
                           value={item.quantity}
-                          onChange={(e) => updateInvoiceItem(index, 'quantity', e.target.value)}
+                          onChange={(e) =>
+                            updateInvoiceItem(index, "quantity", e.target.value)
+                          }
                           placeholder="1"
                           min="1"
                           step="1"
                           required
                         />
                       </div>
-                      
+
                       <div className="item-col-price">
                         <input
                           type="number"
                           step="0.01"
                           value={item.unit_price}
-                          onChange={(e) => updateInvoiceItem(index, 'unit_price', e.target.value)}
+                          onChange={(e) =>
+                            updateInvoiceItem(
+                              index,
+                              "unit_price",
+                              e.target.value,
+                            )
+                          }
                           placeholder="0"
                           min="0"
                           required
                         />
                       </div>
-                      
+
                       <div className="item-col-total">
                         <span className="item-total-display">
-                          {formatCurrency((parseFloat(item.quantity) || 0) * (parseFloat(item.unit_price) || 0))}
+                          {formatCurrency(
+                            (parseFloat(item.quantity) || 0) *
+                              (parseFloat(item.unit_price) || 0),
+                          )}
                         </span>
                       </div>
-                      
+
                       <div className="item-col-actions">
                         {invoiceItems.length > 1 && (
                           <button
@@ -563,32 +692,35 @@ function Dashboard({ user, onLogout }) {
                             className="btn-icon-danger"
                             title="Удалить товар"
                           >
-                            🗑️
+                            <FiTrash2 aria-hidden="true" />
                           </button>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
-                
+
                 <button
                   type="button"
                   onClick={addInvoiceItem}
                   className="btn-add-item"
                 >
-                  ➕ Добавить товар
+                  <FiPlus className="inline-icon" aria-hidden="true" />
+                  Добавить товар
                 </button>
               </div>
 
               <div className="invoice-total-section">
                 <div className="invoice-total-label">Итого:</div>
-                <div className="invoice-total-value">{formatCurrency(calculateTotal())}</div>
+                <div className="invoice-total-value">
+                  {formatCurrency(calculateTotal())}
+                </div>
               </div>
 
               <div className="modal-footer-actions">
-                <button 
-                  type="button" 
-                  onClick={() => setShowCreateModal(false)} 
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
                   className="btn-cancel"
                 >
                   Отмена
@@ -606,4 +738,3 @@ function Dashboard({ user, onLogout }) {
 }
 
 export default Dashboard;
-

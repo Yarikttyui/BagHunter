@@ -1,54 +1,62 @@
-﻿import React, { useState } from 'react';
-import axios from 'axios';
-import './Register.css';
-import { API_BASE_URL } from '../config/api';
+import React, { useState } from "react";
+import axios from "axios";
+import "./Register.css";
+import {
+  FiShield,
+  FiPenTool,
+  FiUser,
+  FiBriefcase,
+  FiKey,
+  FiCopy,
+} from "react-icons/fi";
+import { API_BASE_URL } from "../config/api";
 
 const API_URL = API_BASE_URL;
 
 const INITIAL_FORM = {
-  full_name: '',
-  phone: '',
-  email: '',
-  company_name: '',
-  company_inn: '',
-  company_address: '',
-  username: '',
-  password: '',
-  confirmPassword: ''
+  full_name: "",
+  phone: "",
+  email: "",
+  company_name: "",
+  company_inn: "",
+  company_address: "",
+  username: "",
+  password: "",
+  confirmPassword: "",
 };
 
 function Register({ onSwitchToLogin }) {
   const [formData, setFormData] = useState(INITIAL_FORM);
-  const [recoveryCode, setRecoveryCode] = useState('');
+  const [recoveryCode, setRecoveryCode] = useState("");
   const [showRecoveryCode, setShowRecoveryCode] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleChange = (event) => {
     const { name, value } = event.target;
 
     let nextValue = value;
-    if (name === 'company_inn') {
-      nextValue = value.replace(/\D/g, '');
+    if (name === "company_inn") {
+      nextValue = value.replace(/\D/g, "");
     }
 
     setFormData((prev) => ({
       ...prev,
-      [name]: nextValue
+      [name]: nextValue,
     }));
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setError('');
+    setError("");
 
     if (formData.password !== formData.confirmPassword) {
-      setError('Пароли не совпадают.');
+      setError("Пароли не совпадают.");
       return;
     }
 
     if (formData.password.length < 6) {
-      setError('Пароль должен содержать не менее 6 символов.');
+      setError("Пароль должен содержать не менее 6 символов.");
       return;
     }
 
@@ -63,13 +71,15 @@ function Register({ onSwitchToLogin }) {
         phone: formData.phone,
         company_name: formData.company_name,
         company_inn: formData.company_inn,
-        company_address: formData.company_address
+        company_address: formData.company_address,
       });
 
       setRecoveryCode(response.data.recoveryCode);
       setShowRecoveryCode(true);
     } catch (err) {
-      setError(err.response?.data?.error || 'Не удалось завершить регистрацию.');
+      setError(
+        err.response?.data?.error || "Не удалось завершить регистрацию.",
+      );
     } finally {
       setLoading(false);
     }
@@ -92,11 +102,17 @@ function Register({ onSwitchToLogin }) {
         <div className="register-wrapper">
           <div className="register-card recovery-card">
             <div className="register-card__header">
-              <div className="register-card__icon recovery-card__icon">🔐</div>
+              <div
+                className="register-card__icon recovery-card__icon"
+                aria-hidden="true"
+              >
+                <FiShield />
+              </div>
               <div>
                 <h1 className="register-card__title">Резервный код сохранён</h1>
                 <p className="register-card__subtitle">
-                  Скопируйте и сохраните код — он потребуется для восстановления доступа к порталу.
+                  Скопируйте и сохраните код — он потребуется для восстановления
+                  доступа к порталу.
                 </p>
               </div>
             </div>
@@ -104,7 +120,12 @@ function Register({ onSwitchToLogin }) {
             <div className="recovery-code">
               <span className="recovery-code__label">Ваш код</span>
               <span className="recovery-code__value">{recoveryCode}</span>
-              <button type="button" className="register-button" onClick={handleCopyCode}>
+              <button
+                type="button"
+                className="register-button"
+                onClick={handleCopyCode}
+              >
+                <FiCopy className="inline-icon" aria-hidden="true" />
                 Скопировать в буфер
               </button>
             </div>
@@ -112,7 +133,10 @@ function Register({ onSwitchToLogin }) {
             <div className="register-hint">
               <p>• Никому не передавайте резервный код.</p>
               <p>• Лучше всего хранить его в менеджере паролей.</p>
-              <p>• Без этого кода восстановление доступа может занять больше времени.</p>
+              <p>
+                • Без этого кода восстановление доступа может занять больше
+                времени.
+              </p>
             </div>
 
             <button
@@ -134,24 +158,33 @@ function Register({ onSwitchToLogin }) {
       <div className="register-wrapper">
         <div className="register-card">
           <header className="register-card__header">
-            <div className="register-card__icon">📝</div>
+            <div className="register-card__icon" aria-hidden="true">
+              <FiPenTool />
+            </div>
             <div>
               <h1 className="register-card__title">Регистрация клиента</h1>
               <p className="register-card__subtitle">
-                Подключитесь к порталу, чтобы отслеживать накладные и обмениваться документами в один клик.
+                Подключитесь к порталу, чтобы отслеживать накладные и
+                обмениваться документами в один клик.
               </p>
             </div>
           </header>
 
-          {error && <div className="register-alert register-alert--error">{error}</div>}
+          {error && (
+            <div className="register-alert register-alert--error">{error}</div>
+          )}
 
           <form className="register-form" onSubmit={handleSubmit}>
             <section className="register-section">
               <div className="register-section__header">
-                <span className="register-section__icon">👤</span>
+                <span className="register-section__icon" aria-hidden="true">
+                  <FiUser />
+                </span>
                 <div>
                   <h2>Контактные данные</h2>
-                  <p>Мы будем использовать их для уведомлений и быстрой связи.</p>
+                  <p>
+                    Мы будем использовать их для уведомлений и быстрой связи.
+                  </p>
                 </div>
               </div>
 
@@ -196,10 +229,14 @@ function Register({ onSwitchToLogin }) {
 
             <section className="register-section">
               <div className="register-section__header">
-                <span className="register-section__icon">🏢</span>
+                <span className="register-section__icon" aria-hidden="true">
+                  <FiBriefcase />
+                </span>
                 <div>
                   <h2>Компания</h2>
-                  <p>Информация для выставления документов и работы бухгалтерии.</p>
+                  <p>
+                    Информация для выставления документов и работы бухгалтерии.
+                  </p>
                 </div>
               </div>
 
@@ -243,7 +280,9 @@ function Register({ onSwitchToLogin }) {
 
             <section className="register-section">
               <div className="register-section__header">
-                <span className="register-section__icon">🔑</span>
+                <span className="register-section__icon" aria-hidden="true">
+                  <FiKey />
+                </span>
                 <div>
                   <h2>Данные для входа</h2>
                   <p>Придумайте логин и надёжный пароль.</p>
@@ -290,14 +329,20 @@ function Register({ onSwitchToLogin }) {
               </div>
             </section>
 
-            <button type="submit" className="register-button" disabled={loading}>
-              {loading ? 'Регистрация...' : 'Завершить регистрацию'}
+            <button
+              type="submit"
+              className="register-button"
+              disabled={loading}
+            >
+              {loading ? "Регистрация..." : "Завершить регистрацию"}
             </button>
           </form>
 
           <footer className="register-footer">
             <span>Уже есть аккаунт?</span>
-            <button type="button" onClick={onSwitchToLogin}>Войти</button>
+            <button type="button" onClick={onSwitchToLogin}>
+              Войти
+            </button>
           </footer>
         </div>
       </div>

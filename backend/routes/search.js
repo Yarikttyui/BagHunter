@@ -339,36 +339,193 @@ router.get('/suggestions', async (req, res) => {
       return res.json([]);
     }
     
-    const searchTerm = `%${q}%`;
-    const maxResults = Math.min(parseInt(limit), 20);
+    const allowedTypes = ['clients', 'invoices', 'transactions', 'users', 'products'];
+    const requestedTypes = (type || allowedTypes.join(','))
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
     
-    let suggestions = [];
-    
-    switch (type) {
-      case 'clients':
-        const [clients] = await db.query(
-          'SELECT id, company_name as label, contact_person as sublabel FROM clients WHERE company_name LIKE ? OR contact_person LIKE ? LIMIT ?',
-          [searchTerm, searchTerm, maxResults]
-        );
-        suggestions = clients;
-        break;
-        
-      case 'products':
-        const [products] = await db.query(
-          'SELECT id, name as label, COALESCE(category, unit) as sublabel FROM products WHERE name LIKE ? OR COALESCE(category, \'\') LIKE ? LIMIT ?',
-          [searchTerm, searchTerm, maxResults]
-        );
-        suggestions = products;
-        break;
-        
-      default:
-        return res.status(400).json({ error: 'Неверный тип поиска' });
+    const activeTypes = requestedTypes.filter((item) => allowedTypes.includes(item));
+    if (!activeTypes.length) {
+      return res.status(400).json({ error: 'Недопустимый тип подсказки' });
     }
     
-    res.json(suggestions);
+    const searchTerm = `%${q}%`;
+    const maxResults = Math.min(Number.parseInt(limit, 10) || 10, 20);
+    const perTypeLimit = Math.max(2, Math.ceil(maxResults / activeTypes.length));
+    
+    const suggestions = [];
+    
+    if (activeTypes.includes('clients')) {
+      const [clients] = await db.query(
+        `
+          SELECT id, company_name, contact_person, email, status
+          FROM clients
+          WHERE company_name LIKE ?
+             OR contact_person LIKE ?
+             OR email LIKE ?
+             OR phone LIKE ?
+          ORDER BY company_name ASC
+          LIMIT ?
+        `,
+        [searchTerm, searchTerm, searchTerm, searchTerm, perTypeLimit]
+      );
+      
+      suggestions.push(
+        ...clients.map((client) => ({
+          id: client.id,
+          entity_type: 'client',
+          label: client.company_name,
+          sublabel: client.contact_person || client.email || '',
+          meta: { status: client.status }
+        }))
+      );
+    }
+    
+    if (activeTypes.includes('invoices')) {
+      const [invoices] = await db.query(
+        `
+          SELECT 
+            i.id,
+            i.invoice_number,
+            i.status,
+            i.total_amount,
+            i.invoice_date,
+            c.company_name AS client_name
+          FROM invoices i
+          LEFT JOIN clients c ON c.id = i.client_id
+          WHERE i.invoice_number LIKE ?
+             OR c.company_name LIKE ?
+          ORDER BY i.invoice_date DESC
+          LIMIT ?
+        `,
+        [searchTerm, searchTerm, perTypeLimit]
+      );
+      
+      suggestions.push(
+        ...invoices.map((invoice) => ({
+          id: invoice.id,
+          entity_type: 'invoice',
+          label: invoice.invoice_number,
+          sublabel: invoice.client_name
+            ? `${invoice.client_name} • ${new Date(invoice.invoice_date).toLocaleDateString('ru-RU')}`
+            : new Date(invoice.invoice_date).toLocaleDateString('ru-RU'),
+          meta: {
+            status: invoice.status,
+            amount: invoice.total_amount
+          },
+          search_value: invoice.invoice_number
+        }))
+      );
+    }
+    
+    if (activeTypes.includes('transactions')) {
+      const [transactions] = await db.query(
+        `
+          SELECT 
+            t.id,
+            t.transaction_type,
+            t.amount,
+            t.transaction_date,
+            t.payment_method,
+            i.invoice_number
+          FROM transactions t
+          LEFT JOIN invoices i ON i.id = t.invoice_id
+          WHERE t.description LIKE ?
+             OR i.invoice_number LIKE ?
+          ORDER BY t.transaction_date DESC
+          LIMIT ?
+        `,
+        [searchTerm, searchTerm, perTypeLimit]
+      );
+      
+      suggestions.push(
+        ...transactions.map((transaction) => ({
+          id: transaction.id,
+          entity_type: 'transaction',
+          label: `${transaction.transaction_type === 'income' ? 'Приход' : 'Расход'} • ${Number(transaction.amount || 0).toLocaleString('ru-RU')} ₽`,
+          sublabel: transaction.invoice_number
+            ? `Накладная ${transaction.invoice_number}`
+            : new Date(transaction.transaction_date).toLocaleDateString('ru-RU'),
+          meta: {
+            payment_method: transaction.payment_method
+          },
+          search_value: transaction.invoice_number || String(transaction.id)
+        }))
+      );
+    }
+    
+    if (activeTypes.includes('users')) {
+      const [users] = await db.query(
+        `
+          SELECT 
+            u.id,
+            u.username,
+            u.email,
+            u.role,
+            COALESCE(up.full_name, '') AS full_name
+          FROM users u
+          LEFT JOIN user_profiles up ON up.user_id = u.id
+          WHERE u.username LIKE ?
+             OR u.email LIKE ?
+             OR up.full_name LIKE ?
+          ORDER BY u.username ASC
+          LIMIT ?
+        `,
+        [searchTerm, searchTerm, searchTerm, perTypeLimit]
+      );
+      
+      suggestions.push(
+        ...users.map((user) => ({
+          id: user.id,
+          entity_type: 'user',
+          label: user.full_name || user.username,
+          sublabel: user.email || `@${user.username}`,
+          meta: { role: user.role },
+          search_value: user.username
+        }))
+      );
+    }
+    
+    if (activeTypes.includes('products')) {
+      const [products] = await db.query(
+        `
+          SELECT 
+            p.id,
+            p.name,
+            p.category,
+            p.unit,
+            p.price,
+            p.is_active
+          FROM products p
+          WHERE p.name LIKE ?
+             OR COALESCE(p.category, '') LIKE ?
+          ORDER BY p.name ASC
+          LIMIT ?
+        `,
+        [searchTerm, searchTerm, perTypeLimit]
+      );
+      
+      suggestions.push(
+        ...products.map((product) => ({
+          id: product.id,
+          entity_type: 'product',
+          label: product.name,
+          sublabel: product.category || product.unit || '',
+          meta: { price: product.price, active: Boolean(product.is_active) }
+        }))
+      );
+    }
+    
+    const collator = new Intl.Collator('ru-RU');
+    const normalized = suggestions
+      .sort((a, b) => collator.compare(a.label, b.label))
+      .slice(0, maxResults);
+    
+    res.json(normalized);
   } catch (error) {
-    console.error('Ошибка автодополнения:', error);
-    res.status(500).json({ error: 'Ошибка поиска' });
+    console.error('Ошибка получения подсказок:', error);
+    res.status(500).json({ error: 'Ошибка сервера' });
   }
 });
 

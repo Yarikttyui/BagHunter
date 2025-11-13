@@ -28,12 +28,12 @@ async function downloadFont(font) {
     const filePath = path.join(fontsDir, font.name);
     
     if (fs.existsSync(filePath)) {
-      console.log(`✅ Шрифт ${font.name} уже существует`);
+      console.log(`[ok] Шрифт ${font.name} уже существует`);
       resolve();
       return;
     }
 
-    console.log(`📥 Скачивание ${font.name}...`);
+    console.log(`Скачивание Скачивание ${font.name}...`);
     
     https.get(font.url, (response) => {
       if (response.statusCode === 301 || response.statusCode === 302) {
@@ -41,7 +41,7 @@ async function downloadFont(font) {
           const fileStream = fs.createWriteStream(filePath);
           pipeline(redirectResponse, fileStream)
             .then(() => {
-              console.log(`✅ ${font.name} успешно скачан`);
+              console.log(`[ok] ${font.name} успешно скачан`);
               resolve();
             })
             .catch(reject);
@@ -50,7 +50,7 @@ async function downloadFont(font) {
         const fileStream = fs.createWriteStream(filePath);
         pipeline(response, fileStream)
           .then(() => {
-            console.log(`✅ ${font.name} успешно скачан`);
+            console.log(`[ok] ${font.name} успешно скачан`);
             resolve();
           })
           .catch(reject);
@@ -62,17 +62,17 @@ async function downloadFont(font) {
 }
 
 async function downloadAllFonts() {
-  console.log('🔤 Начинаем скачивание шрифтов DejaVu Sans...\n');
+  console.log('[fonts] Начинаем скачивание шрифтов DejaVu Sans...\n');
   
   try {
     for (const font of fonts) {
       await downloadFont(font);
     }
-    console.log('\n✅ Все шрифты успешно установлены!');
-    console.log('📄 Теперь PDF-документы будут корректно отображать кириллицу.');
+    console.log('\n[ok] Все шрифты успешно установлены!');
+    console.log('[info] Теперь PDF-документы будут корректно отображать кириллицу.');
   } catch (error) {
-    console.error('\n❌ Ошибка при скачивании шрифтов:', error.message);
-    console.log('\n📝 Вы можете скачать шрифты вручную:');
+    console.error('\n[error] Ошибка при скачивании шрифтов:', error.message);
+    console.log('\n[manual] Вы можете скачать шрифты вручную:');
     console.log('1. Перейдите на https://dejavu-fonts.github.io/Download.html');
     console.log('2. Скачайте DejaVu Sans TTF');
     console.log('3. Скопируйте DejaVuSans.ttf и DejaVuSans-Bold.ttf в папку backend/fonts/');

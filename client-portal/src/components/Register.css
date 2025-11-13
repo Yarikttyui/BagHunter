@@ -60,6 +60,13 @@
   margin-bottom: 32px;
 }
 
+.inline-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+}
+
 .register-card__icon {
   flex: 0 0 68px;
   height: 68px;

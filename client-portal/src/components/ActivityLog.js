@@ -2,6 +2,27 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './ActivityLog.css';
 import { API_BASE_URL } from '../config/api';
+import {
+  FiLogIn,
+  FiLogOut,
+  FiPlusCircle,
+  FiEdit3,
+  FiTrash2,
+  FiEye,
+  FiDownload,
+  FiUpload,
+  FiShare2,
+  FiInbox,
+  FiFileText,
+  FiUser,
+  FiDollarSign,
+  FiBarChart2,
+  FiUsers,
+  FiMessageCircle,
+  FiBell,
+  FiPackage,
+  FiClipboard
+} from 'react-icons/fi';
 
 const API_URL = API_BASE_URL;
 
@@ -39,35 +60,32 @@ function ActivityLog({ userId }) {
     });
   };
 
-  const getActionIcon = (actionType) => {
-    const icons = {
-      'login': '🔐',
-      'logout': '🚪',
-      'create': '➕',
-      'update': '✏️',
-      'delete': '🗑️',
-      'view': '👁️',
-      'download': '⬇️',
-      'upload': '⬆️',
-      'export': '📤',
-      'import': '📥'
-    };
-    return icons[actionType] || '📌';
+  const ACTION_ICONS = {
+    login: FiLogIn,
+    logout: FiLogOut,
+    create: FiPlusCircle,
+    update: FiEdit3,
+    delete: FiTrash2,
+    view: FiEye,
+    download: FiDownload,
+    upload: FiUpload,
+    export: FiShare2,
+    import: FiInbox
   };
 
-  const getResourceIcon = (resourceType) => {
-    const icons = {
-      'invoice': '📄',
-      'client': '👤',
-      'transaction': '💰',
-      'report': '📊',
-      'user': '👤',
-      'profile': '👤',
-      'comment': '💬',
-      'notification': '🔔'
-    };
-    return icons[resourceType] || '📦';
+  const RESOURCE_ICONS = {
+    invoice: FiFileText,
+    client: FiUser,
+    transaction: FiDollarSign,
+    report: FiBarChart2,
+    user: FiUsers,
+    profile: FiUser,
+    comment: FiMessageCircle,
+    notification: FiBell
   };
+
+  const getActionIcon = (type) => ACTION_ICONS[type] || FiPackage;
+  const getResourceIcon = (type) => RESOURCE_ICONS[type] || FiPackage;
 
   const filteredActivities = filter === 'all'
     ? activities
@@ -82,7 +100,10 @@ function ActivityLog({ userId }) {
   return (
     <div className="activity-log">
       <div className="activity-header">
-        <h2>📋 История активности</h2>
+        <h2>
+          <FiClipboard className="inline-icon" aria-hidden="true" />
+          История активности
+        </h2>
         <div className="activity-controls">
           <select value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="all">Все действия</option>
@@ -111,14 +132,20 @@ function ActivityLog({ userId }) {
           {filteredActivities.map((activity, index) => (
             <div key={activity.id || index} className="activity-item">
               <div className="activity-icon">
-                {getActionIcon(activity.action_type)}
+                {React.createElement(getActionIcon(activity.action_type), {
+                  'aria-hidden': true
+                })}
               </div>
               <div className="activity-content">
                 <div className="activity-main">
                   <span className="action-type">{activity.action_type}</span>
                   {activity.resource_type && (
                     <span className="resource-type">
-                      {getResourceIcon(activity.resource_type)} {activity.resource_type}
+                      {React.createElement(getResourceIcon(activity.resource_type), {
+                        'aria-hidden': true,
+                        className: 'inline-icon'
+                      })}
+                      {activity.resource_type}
                       {activity.resource_id && ` #${activity.resource_id}`}
                     </span>
                   )}

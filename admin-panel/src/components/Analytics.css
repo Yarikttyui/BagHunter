@@ -238,6 +238,36 @@
   font-size: 20px;
   text-align: center;
   width: 60px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.rank-icon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(102, 126, 234, 0.15);
+  color: #667eea;
+  font-size: 18px;
+}
+
+.rank-icon.rank-0 {
+  background: rgba(250, 204, 21, 0.2);
+  color: #b45309;
+}
+
+.rank-icon.rank-1 {
+  background: rgba(148, 163, 184, 0.2);
+  color: #475569;
+}
+
+.rank-icon.rank-2 {
+  background: rgba(248, 191, 132, 0.2);
+  color: #b45309;
 }
 
 .top-clients-table .client-name {

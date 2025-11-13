@@ -48,7 +48,7 @@ async function notifyCommentParticipants({ db, invoiceId, author, comment, isInt
 
   const preview = buildCommentPreview(comment.comment_text);
   const authorName = author.full_name || author.username || 'Пользователь';
-  const notificationTitle = `💬 Комментарий по накладной №${invoiceMeta.invoice_number}`;
+  const notificationTitle = `Новый комментарий по накладной №${invoiceMeta.invoice_number}`;
   const notificationMessage = preview ? `${authorName}: ${preview}` : authorName;
 
   for (const recipientId of recipients) {

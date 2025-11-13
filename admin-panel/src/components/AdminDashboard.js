@@ -1,5 +1,26 @@
-﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
+import {
+  FiHome,
+  FiUsers,
+  FiLayers,
+  FiUserCheck,
+  FiFileText,
+  FiDollarSign,
+  FiBarChart2,
+  FiUser,
+  FiEdit2,
+  FiTrash2,
+  FiDownload,
+  FiTrendingUp,
+  FiArrowUpRight,
+  FiArrowDownRight,
+  FiCheckCircle,
+  FiXCircle,
+  FiMail,
+  FiPhone,
+  FiMessageCircle
+} from 'react-icons/fi';
 import ColorBends from './ColorBends';
 import NotificationBell from './NotificationBell';
 import SearchFilter from './SearchFilter';
@@ -30,12 +51,16 @@ const ACTION_LABELS = {
   delete: '\u0423\u0434\u0430\u043b\u0435\u043d\u0438\u0435',
   deleted: '\u0423\u0434\u0430\u043b\u0435\u043d\u0438\u0435',
   status_change: '\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u0441\u0442\u0430\u0442\u0443\u0441\u0430',
-  status_changed: '\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u0441\u0442\u0430\u0442\u0443\u0441\u0430'
+  status_changed: '\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u0441\u0442\u0430\u0442\u0443\u0441\u0430',
+  comment: 'Комментарий добавлен',
+  comment_edit: 'Комментарий обновлён',
+  comment_delete: 'Комментарий удалён'
 };
 
 const LOG_DEFAULT_DESCRIPTIONS = {
   created: '\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u0441\u043e\u0437\u0434\u0430\u043d\u0430',
-  updated: '\u0414\u0430\u043d\u043d\u044b\u0435 \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u043e\u0439 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b'
+  updated: '\u0414\u0430\u043d\u043d\u044b\u0435 \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u043e\u0439 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b',
+  comment: 'Добавлен комментарий'
 };
 
 const hasCyrillic = (value) => /[А-Яа-яЁё]/.test(value || '');
@@ -90,7 +115,24 @@ function AdminDashboard({ user, onLogout }) {
   const [draggedTab, setDraggedTab] = useState(null);
   const [tabOrder, setTabOrder] = useState(() => {
     const saved = localStorage.getItem(`tabOrder_${user.id}`);
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        if (parsed.every((item) => typeof item === 'string')) {
+          return parsed;
+        }
+        const ids = parsed
+          .map((item) => (typeof item === 'string' ? item : item?.id))
+          .filter(Boolean);
+        return ids.length ? ids : null;
+      }
+    } catch (error) {
+      console.warn('Не удалось прочитать порядок вкладок', error);
+    }
+    return null;
   });
 
   const [searchTermClients, setSearchTermClients] = useState('');
@@ -608,12 +650,159 @@ const downloadInvoicePdf = async (invoiceId) => {
     return methods[method] || method;
   };
 
-  
-  const filteredClients = useMemo(() => clients, [clients]);
+  const normalizeSearchValue = (value) => (value ?? '').toString().toLowerCase();
 
-  const filteredInvoices = useMemo(() => invoices, [invoices]);
+  const getDateOnly = (value) => {
+    if (!value) {
+      return '';
+    }
 
-  const filteredTransactions = useMemo(() => transactions, [transactions]);
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+
+    return date.toISOString().split('T')[0];
+  };
+
+  const parseAmount = (value) => {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const financialReportCards = stats
+    ? [
+        {
+          id: 'income',
+          title: 'Общий доход',
+          value: formatCurrency(stats.income),
+          label: 'Сумма всех поступлений',
+          color: '#28a745'
+        },
+        {
+          id: 'expense',
+          title: 'Общие расходы',
+          value: formatCurrency(stats.expense),
+          label: 'Все списания',
+          color: '#dc3545'
+        },
+        {
+          id: 'profit',
+          title: 'Чистая прибыль',
+          value: formatCurrency(stats.profit),
+          label: stats.profit >= 0 ? 'Положительный результат' : 'Отрицательный результат',
+          color: stats.profit >= 0 ? '#28a745' : '#dc3545'
+        },
+        {
+          id: 'invoices',
+          title: 'Всего накладных',
+          value: stats.invoices?.total_invoices || 0,
+          label: `Доставлено: ${stats.invoices?.delivered || 0} | В пути: ${stats.invoices?.in_transit || 0} | Ожидают: ${stats.invoices?.pending || 0} | Отменены: ${stats.invoices?.cancelled || 0}`,
+          color: '#17a2b8'
+        }
+      ]
+    : [];
+
+  const filteredClients = useMemo(() => {
+    const search = normalizeSearchValue(searchTermClients).trim();
+
+    if (!search) {
+      return clients;
+    }
+
+    return clients.filter((client) => {
+      const fields = [
+        client.company_name,
+        client.full_name,
+        client.email,
+        client.phone,
+        client.inn,
+        client.username
+      ];
+
+      return fields.some((field) => normalizeSearchValue(field).includes(search));
+    });
+  }, [clients, searchTermClients]);
+
+  const filteredInvoices = useMemo(() => {
+    const search = normalizeSearchValue(searchTermInvoices).trim();
+    const minAmount = parseAmount(filtersInvoices.minAmount);
+    const maxAmount = parseAmount(filtersInvoices.maxAmount);
+
+    return invoices.filter((invoice) => {
+      const invoiceDate = getDateOnly(invoice.invoice_date);
+
+      const matchesSearch =
+        !search ||
+        [
+          invoice.invoice_number,
+          invoice.client_name,
+          invoice.status,
+          invoice.notes
+        ].some((field) => normalizeSearchValue(field).includes(search));
+
+      const matchesStatus = !filtersInvoices.status || invoice.status === filtersInvoices.status;
+      const matchesDateFrom = !filtersInvoices.dateFrom || (invoiceDate && invoiceDate >= filtersInvoices.dateFrom);
+      const matchesDateTo = !filtersInvoices.dateTo || (invoiceDate && invoiceDate <= filtersInvoices.dateTo);
+
+      const amount = parseAmount(invoice.total_amount) ?? 0;
+      const matchesMinAmount = minAmount === null || amount >= minAmount;
+      const matchesMaxAmount = maxAmount === null || amount <= maxAmount;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesDateFrom &&
+        matchesDateTo &&
+        matchesMinAmount &&
+        matchesMaxAmount
+      );
+    });
+  }, [invoices, searchTermInvoices, filtersInvoices]);
+
+  const filteredTransactions = useMemo(() => {
+    const search = normalizeSearchValue(searchTermTransactions).trim();
+    const minAmount = parseAmount(filtersTransactions.minAmount);
+    const maxAmount = parseAmount(filtersTransactions.maxAmount);
+
+    return transactions.filter((transaction) => {
+      const transactionDate = getDateOnly(transaction.transaction_date);
+
+      const matchesSearch =
+        !search ||
+        [
+          transaction.description,
+          transaction.payment_method,
+          transaction.transaction_type
+        ].some((field) => normalizeSearchValue(field).includes(search));
+
+      const matchesType =
+        !filtersTransactions.transactionType ||
+        transaction.transaction_type === filtersTransactions.transactionType;
+
+      const matchesDateFrom =
+        !filtersTransactions.dateFrom || (transactionDate && transactionDate >= filtersTransactions.dateFrom);
+      const matchesDateTo =
+        !filtersTransactions.dateTo || (transactionDate && transactionDate <= filtersTransactions.dateTo);
+
+      const amount = parseAmount(transaction.amount) ?? 0;
+      const matchesMinAmount = minAmount === null || amount >= minAmount;
+      const matchesMaxAmount = maxAmount === null || amount <= maxAmount;
+
+      return (
+        matchesSearch &&
+        matchesType &&
+        matchesDateFrom &&
+        matchesDateTo &&
+        matchesMinAmount &&
+        matchesMaxAmount
+      );
+    });
+  }, [transactions, searchTermTransactions, filtersTransactions]);
 
   const sortData = (data, column, direction) => {
     if (!column) return data;
@@ -645,23 +834,35 @@ const downloadInvoicePdf = async (invoiceId) => {
     });
   };
 
-  const defaultTabs = [
-    { id: 'dashboard', label: '📊 Дашборд', visible: true },
-    { id: 'users', label: '👤 Пользователи', visible: isAdmin },
-    { id: 'logs', label: '📋 Логи накладных', visible: isAdmin },
-    { id: 'clients', label: '👥 Клиенты', visible: true },
-    { id: 'invoices', label: '📋 Накладные', visible: true },
-    { id: 'transactions', label: '💰 Транзакции', visible: true },
-    { id: 'reports', label: '📈 Отчеты', visible: true },
-    { id: 'profile', label: '👤 Мой профиль', visible: true }
-  ];
+  const defaultTabs = useMemo(
+    () => [
+      { id: 'dashboard', label: 'Дашборд', icon: FiHome, visible: true },
+      { id: 'users', label: 'Пользователи', icon: FiUsers, visible: isAdmin },
+      { id: 'logs', label: 'Логи накладных', icon: FiLayers, visible: isAdmin },
+      { id: 'clients', label: 'Клиенты', icon: FiUserCheck, visible: true },
+      { id: 'invoices', label: 'Накладные', icon: FiFileText, visible: true },
+      { id: 'transactions', label: 'Транзакции', icon: FiDollarSign, visible: true },
+      { id: 'reports', label: 'Отчеты', icon: FiBarChart2, visible: true },
+      { id: 'profile', label: 'Мой профиль', icon: FiUser, visible: true }
+    ],
+    [isAdmin]
+  );
 
-  const tabs = tabOrder 
-    ? tabOrder.filter(tab => {
-        const defaultTab = defaultTabs.find(dt => dt.id === tab.id);
-        return defaultTab && defaultTab.visible;
-      })
-    : defaultTabs.filter(tab => tab.visible);
+  const visibleTabs = useMemo(
+    () => defaultTabs.filter((tab) => tab.visible),
+    [defaultTabs]
+  );
+
+  const tabs = useMemo(() => {
+    if (!tabOrder || tabOrder.length === 0) {
+      return visibleTabs;
+    }
+    const ordered = tabOrder
+      .map((tabId) => visibleTabs.find((tab) => tab.id === tabId))
+      .filter(Boolean);
+    const missing = visibleTabs.filter((tab) => !tabOrder.includes(tab.id));
+    return [...ordered, ...missing];
+  }, [tabOrder, visibleTabs]);
 
   const handleDragStart = (e, tabId) => {
     setDraggedTab(tabId);
@@ -678,7 +879,7 @@ const downloadInvoicePdf = async (invoiceId) => {
     
     if (!draggedTab || draggedTab === targetTabId) return;
 
-    const currentTabs = tabOrder || defaultTabs.filter(tab => tab.visible);
+    const currentTabs = tabs;
     const draggedIndex = currentTabs.findIndex(tab => tab.id === draggedTab);
     const targetIndex = currentTabs.findIndex(tab => tab.id === targetTabId);
 
@@ -688,8 +889,9 @@ const downloadInvoicePdf = async (invoiceId) => {
     const [removed] = newTabs.splice(draggedIndex, 1);
     newTabs.splice(targetIndex, 0, removed);
 
-    setTabOrder(newTabs);
-    localStorage.setItem(`tabOrder_${user.id}`, JSON.stringify(newTabs));
+    const newOrderIds = newTabs.map(tab => tab.id);
+    setTabOrder(newOrderIds);
+    localStorage.setItem(`tabOrder_${user.id}`, JSON.stringify(newOrderIds));
     setDraggedTab(null);
   };
 
@@ -755,20 +957,28 @@ const downloadInvoicePdf = async (invoiceId) => {
         </div>
 
         <nav className="sidebar-nav">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-              draggable
-              onDragStart={(e) => handleDragStart(e, tab.id)}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, tab.id)}
-              onDragEnd={handleDragEnd}
-            >
-              {tab.label}
-            </button>
-          ))}
+          {tabs.map((tab) => {
+            const TabIcon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+                draggable
+                onDragStart={(e) => handleDragStart(e, tab.id)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, tab.id)}
+                onDragEnd={handleDragEnd}
+              >
+                {TabIcon && (
+                  <span className="sidebar-item-icon" aria-hidden="true">
+                    <TabIcon />
+                  </span>
+                )}
+                <span className="sidebar-item-label">{tab.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
         <button onClick={onLogout} className="sidebar-logout">
@@ -804,7 +1014,8 @@ const downloadInvoicePdf = async (invoiceId) => {
                   <div className="label">
                     Доставлено: <span style= {{color: '#28a745'}}>{stats.invoices?.delivered || 0}</span> | 
                     В пути: <span style= {{color: '#17a2b8'}}>{stats.invoices?.in_transit || 0}</span> |
-                    Ожидают: <span style= {{color: '#ffc107'}}>{stats.invoices?.pending || 0}</span>
+                    Ожидают: <span style= {{color: '#ffc107'}}>{stats.invoices?.pending || 0}</span> |
+                    Отменены: <span style= {{color: '#f87171'}}>{stats.invoices?.cancelled || 0}</span>
                   </div>
                 </div>
                 <div className="stat-card">
@@ -906,10 +1117,12 @@ const downloadInvoicePdf = async (invoiceId) => {
                       {canManageClients && (
                         <>
                           <button onClick={() => openModal('client', client)} className="btn-info">
-                            ✏️ Изменить
+                            <FiEdit2 className="inline-icon" aria-hidden="true" />
+                            Изменить
                           </button>
                           <button onClick={() => handleDelete('clients', client.id)} className="btn-danger">
-                            🗑️ Удалить
+                            <FiTrash2 className="inline-icon" aria-hidden="true" />
+                            Удалить
                           </button>
                         </>
                       )}
@@ -950,7 +1163,8 @@ const downloadInvoicePdf = async (invoiceId) => {
                   className="btn-success"
                   title="Экспортировать все накладные в Excel"
                 >
-                  📊 Экспорт Excel
+                  <FiDownload className="inline-icon" aria-hidden="true" />
+                  Экспорт Excel
                 </button>
                 <button onClick={() => openModal('invoice')} className="btn-primary">
                   + Создать накладную
@@ -1100,11 +1314,20 @@ const downloadInvoicePdf = async (invoiceId) => {
                   label: 'Тип', 
                   sortable: true,
                   render: (transaction) => (
-                    <span style={{
-                      color: transaction.transaction_type === 'income' ? '#28a745' : '#dc3545',
-                      fontWeight: 'bold'
-                    }}>
-                      {transaction.transaction_type === 'income' ? '📈 Доход' : '📉 Расход'}
+                    <span
+                      className={`transaction-type-chip transaction-type-chip--${transaction.transaction_type}`}
+                    >
+                      {transaction.transaction_type === 'income' ? (
+                        <>
+                          <FiArrowUpRight aria-hidden="true" />
+                          Доход
+                        </>
+                      ) : (
+                        <>
+                          <FiArrowDownRight aria-hidden="true" />
+                          Расход
+                        </>
+                      )}
                     </span>
                   )
                 },
@@ -1113,10 +1336,13 @@ const downloadInvoicePdf = async (invoiceId) => {
                   label: 'Сумма', 
                   sortable: true,
                   render: (transaction) => (
-                    <span style={{
-                      color: transaction.transaction_type === 'income' ? '#28a745' : '#dc3545',
-                      fontWeight: 'bold'
-                    }}>
+                    <span
+                      className={
+                        transaction.transaction_type === 'income'
+                          ? 'transaction-amount--income'
+                          : 'transaction-amount--expense'
+                      }
+                    >
                       {formatCurrency(transaction.amount)}
                     </span>
                   )
@@ -1168,63 +1394,93 @@ const downloadInvoicePdf = async (invoiceId) => {
               <h2 className="section-title">Финансовые отчеты</h2>
             </div>
 
-            <div className="card" style={{marginBottom: '20px'}}>
-              <h3 style={{marginBottom: '15px'}}>📊 Экспорт данных</h3>
-              <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
-                <button 
-                  onClick={() => {
-                    const params = new URLSearchParams();
-                    
-                    downloadFileWithToken(`${API_URL}/reports/export/excel?${params}`, 'report.xlsx', 'Не удалось скачать Excel отчёт.');
-                  }} 
-                  className="btn-success"
-                  title="Экспортировать финансовый отчет в Excel"
-                >
-                  📊 Экспорт полного отчета (Excel)
-                </button>
-                <button 
-                  onClick={() => downloadFileWithToken(`${API_URL}/invoices/export/excel`, 'invoices.xlsx', 'Не удалось скачать Excel с накладными.')} 
-                  className="btn-info"
-                  title="Экспортировать все накладные в Excel"
-                >
-                  📋 Экспорт накладных (Excel)
-                </button>
+            <div className="stats-grid reports-actions-grid">
+              <div className="stat-card stat-card--actions">
+                <h3 className="stat-card__title">
+                  <FiDownload aria-hidden="true" />
+                  <span>Экспорт данных</span>
+                </h3>
+                <p className="stat-card__caption">Скачивайте актуальные отчёты и накладные одним кликом.</p>
+                <div className="stat-card__actions">
+                  <button 
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      downloadFileWithToken(`${API_URL}/reports/export/excel?${params}`, 'report.xlsx', 'Не удалось скачать Excel отчёт.');
+                    }} 
+                    className="btn-success"
+                    title="Экспортировать финансовый отчет в Excel"
+                  >
+                    <FiDownload className="inline-icon" aria-hidden="true" />
+                    Полный отчёт (Excel)
+                  </button>
+                  <button 
+                    onClick={() => downloadFileWithToken(`${API_URL}/invoices/export/excel`, 'invoices.xlsx', 'Не удалось скачать Excel с накладными.')} 
+                    className="btn-info"
+                    title="Экспортировать все накладные в Excel"
+                  >
+                    <FiFileText className="inline-icon" aria-hidden="true" />
+                    Накладные (Excel)
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className="card" style={{marginBottom: '20px'}}>
-              <h3 style={{marginBottom: '15px'}}>💼 Текущая статистика</h3>
               {stats && (
-                <div className="stats-grid">
-                  <div className="stat-card">
-                    <h3>Общий доход</h3>
-                    <div className="value" style={{color: '#28a745'}}>{formatCurrency(stats.income)}</div>
-                  </div>
-                  <div className="stat-card">
-                    <h3>Общие расходы</h3>
-                    <div className="value" style={{color: '#dc3545'}}>{formatCurrency(stats.expense)}</div>
-                  </div>
-                  <div className="stat-card">
-                    <h3>Чистая прибыль</h3>
-                    <div className="value" style={{color: stats.profit >= 0 ? '#28a745' : '#dc3545'}}>
-                      {formatCurrency(stats.profit)}
+                <div className="stat-card stat-card--summary">
+                  <h3 className="stat-card__title">
+                    <FiBarChart2 aria-hidden="true" />
+                    <span>Текущая статистика</span>
+                  </h3>
+                  <div className="stat-card__list">
+                    <div className="stat-card__list-item">
+                      <span className="stat-card__list-label">Общий доход</span>
+                      <span className="stat-card__list-value text-positive">{formatCurrency(stats.income)}</span>
                     </div>
-                  </div>
-                  <div className="stat-card">
-                    <h3>Всего накладных</h3>
-                    <div className="value">{stats.invoices?.total_invoices || 0}</div>
-                    <div className="label">
-                      ✅ {stats.invoices?.delivered || 0} | 
-                      🚚 {stats.invoices?.in_transit || 0} | 
-                      ⏳ {stats.invoices?.pending || 0}
+                    <div className="stat-card__list-item">
+                      <span className="stat-card__list-label">Общие расходы</span>
+                      <span className="stat-card__list-value text-negative">{formatCurrency(stats.expense)}</span>
+                    </div>
+                    <div className="stat-card__list-item">
+                      <span className="stat-card__list-label">Чистая прибыль</span>
+                      <span
+                        className={`stat-card__list-value ${stats.profit >= 0 ? 'text-positive' : 'text-negative'}`}
+                      >
+                        {formatCurrency(stats.profit)}
+                      </span>
+                    </div>
+                    <div className="stat-card__list-item">
+                      <span className="stat-card__list-label">Всего накладных</span>
+                      <span className="stat-card__list-value">
+                        {stats.invoices?.total_invoices || 0}
+                      </span>
+                    </div>
+                    <div className="stat-card__list-item">
+                      <span className="stat-card__list-label">Статусы</span>
+                      <span className="stat-card__list-value">
+                        Доставлено: {stats.invoices?.delivered || 0} | В пути: {stats.invoices?.in_transit || 0} | Ожидают: {stats.invoices?.pending || 0} | Отменены: {stats.invoices?.cancelled || 0}
+                      </span>
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
+            {stats && financialReportCards.length > 0 && (
+              <div className="stats-grid reports-metrics-grid">
+                {financialReportCards.map((card) => (
+                  <div key={card.id} className="stat-card">
+                    <h3>{card.title}</h3>
+                    <div className="value" style={{color: card.color}}>{card.value}</div>
+                    {card.label && <div className="label">{card.label}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="table-wrapper table-wrapper--dashboard">
-              <h3 className="table-wrapper__title">📈 Последние транзакции</h3>
+              <h3 className="table-wrapper__title">
+                <FiTrendingUp aria-hidden="true" />
+                <span>Последние транзакции</span>
+              </h3>
               <table className="glass-table glass-table--compact">
                 <thead>
                   <tr>
@@ -1236,23 +1492,37 @@ const downloadInvoicePdf = async (invoiceId) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.slice(0, 10).map(transaction => (
-                    <tr key={transaction.id}>
-                      <td style={{
-                        color: transaction.transaction_type === 'income' ? '#28a745' : '#dc3545',
-                        fontWeight: 'bold'
-                      }}>
-                        {transaction.transaction_type === 'income' ? '📈 Доход' : '📉 Расход'}
-                      </td>
-                      <td style={{
-                        color: transaction.transaction_type === 'income' ? '#28a745' : '#dc3545',
-                        fontWeight: 'bold'
-                      }}>
-                        {formatCurrency(transaction.amount)}
-                      </td>
-                      <td>{formatDate(transaction.transaction_date)}</td>
-                      <td>{getPaymentMethodText(transaction.payment_method)}</td>
-                      <td>{transaction.description || '-'}</td>
+                    {transactions.slice(0, 10).map(transaction => (
+                      <tr key={transaction.id}>
+                        <td>
+                          <span
+                            className={`transaction-type-chip transaction-type-chip--${transaction.transaction_type}`}
+                          >
+                            {transaction.transaction_type === 'income' ? (
+                              <>
+                                <FiArrowUpRight aria-hidden="true" />
+                                Доход
+                              </>
+                            ) : (
+                              <>
+                                <FiArrowDownRight aria-hidden="true" />
+                                Расход
+                              </>
+                            )}
+                          </span>
+                        </td>
+                        <td
+                          className={
+                            transaction.transaction_type === 'income'
+                              ? 'transaction-amount--income'
+                              : 'transaction-amount--expense'
+                          }
+                        >
+                          {formatCurrency(transaction.amount)}
+                        </td>
+                        <td>{formatDate(transaction.transaction_date)}</td>
+                        <td>{getPaymentMethodText(transaction.payment_method)}</td>
+                        <td>{transaction.description || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1300,17 +1570,27 @@ const downloadInvoicePdf = async (invoiceId) => {
 
                   <div className="user-card-details">
                     <div className="detail-row">
-                      <span className="detail-icon">📧</span>
+                      <span className="detail-icon">
+                        <FiMail aria-hidden="true" />
+                      </span>
                       <span className="detail-label">Email:</span>
                       <span className="detail-value">{u.email || '-'}</span>
                     </div>
                     <div className="detail-row">
-                      <span className="detail-icon">📱</span>
+                      <span className="detail-icon">
+                        <FiPhone aria-hidden="true" />
+                      </span>
                       <span className="detail-label">Телефон:</span>
                       <span className="detail-value">{u.phone || '-'}</span>
                     </div>
                     <div className="detail-row">
-                      <span className="detail-icon">{u.is_verified ? '✅' : '❌'}</span>
+                      <span className="detail-icon">
+                        {u.is_verified ? (
+                          <FiCheckCircle aria-hidden="true" style={{ color: '#28a745' }} />
+                        ) : (
+                          <FiXCircle aria-hidden="true" style={{ color: '#dc3545' }} />
+                        )}
+                      </span>
                       <span className="detail-label">Статус:</span>
                       <span className="detail-value">{u.is_verified ? 'Проверен' : 'Не проверен'}</span>
                     </div>
@@ -1818,7 +2098,10 @@ const downloadInvoicePdf = async (invoiceId) => {
                 </table>
               </div>
 
-              <h3 className="section-title comments-title">💬 Комментарии</h3>
+              <h3 className="section-title comments-title">
+                <FiMessageCircle className="inline-icon" aria-hidden="true" />
+                Комментарии
+              </h3>
               <AdminComments invoiceId={selectedInvoiceDetails.id} user={user} />
             </div>
           </div>

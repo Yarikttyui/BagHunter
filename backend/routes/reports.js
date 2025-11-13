@@ -106,6 +106,7 @@ router.get('/stats', requireRole('admin', 'accountant', 'client'), async (req, r
           SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
           SUM(CASE WHEN status = 'in_transit' THEN 1 ELSE 0 END) as in_transit,
           SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled,
           SUM(total_amount) as total_amount
         FROM invoices
         ${whereClause}
@@ -173,6 +174,7 @@ router.get('/export/excel', requireRole('admin', 'accountant'), async (req, res)
           SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered,
           SUM(CASE WHEN status = 'in_transit' THEN 1 ELSE 0 END) as in_transit,
           SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+          SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled,
           SUM(total_amount) as total_amount
         FROM invoices
         ${invoiceClause}

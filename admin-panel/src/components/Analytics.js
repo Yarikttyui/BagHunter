@@ -9,6 +9,16 @@ import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import './Analytics.css';
 import { API_BASE_URL } from '../config/api';
+import {
+  FiBarChart2,
+  FiDollarSign,
+  FiCalendar,
+  FiActivity,
+  FiClipboard,
+  FiCreditCard,
+  FiTrendingUp,
+  FiAward
+} from 'react-icons/fi';
 
 const API_URL = API_BASE_URL;
 
@@ -89,6 +99,17 @@ function Analytics() {
     return format(date, 'LLL yyyy', { locale: ru });
   };
 
+  const renderRankCell = (index) => {
+    if (index < 3) {
+      return (
+        <span className={`rank-icon rank-${index}`} aria-hidden="true">
+          <FiAward />
+        </span>
+      );
+    }
+    return index + 1;
+  };
+
   const getStatusName = (status) => {
     const names = {
       pending: 'Ожидает',
@@ -111,7 +132,7 @@ function Analytics() {
   return (
     <div className="analytics-container">
       <div className="analytics-header">
-        <h1>📊 Расширенная аналитика</h1>
+        <h1><FiBarChart2 className="inline-icon" aria-hidden="true" />Расширенная аналитика</h1>
         <div className="time-range-selector">
           <button 
             className={timeRange === '3' ? 'active' : ''} 
@@ -141,7 +162,7 @@ function Analytics() {
       </div>
 
       <div className="chart-card">
-        <h2>💰 Динамика доходов и расходов</h2>
+        <h2><FiDollarSign className="inline-icon" aria-hidden="true" />Динамика доходов и расходов</h2>
         <ResponsiveContainer width="100%" height={350}>
           <AreaChart data={incomeExpenseData}>
             <defs>
@@ -190,7 +211,7 @@ function Analytics() {
       </div>
 
       <div className="chart-card">
-        <h2>📅 Квартальная статистика</h2>
+        <h2><FiCalendar className="inline-icon" aria-hidden="true" />Квартальная статистика</h2>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={quarterlyStats}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -211,7 +232,7 @@ function Analytics() {
 
       {forecast && forecast.forecast && forecast.forecast.length > 0 && (
         <div className="chart-card forecast-card">
-          <h2>🔮 Прогноз доходов</h2>
+          <h2><FiActivity className="inline-icon" aria-hidden="true" />Прогноз доходов</h2>
           <div className="forecast-info">
             <div className="forecast-stat">
               <span className="label">Средний доход:</span>
@@ -248,7 +269,7 @@ function Analytics() {
 
       <div className="charts-row">
         <div className="chart-card half">
-          <h2>📋 Распределение по статусам</h2>
+          <h2><FiClipboard className="inline-icon" aria-hidden="true" />Распределение по статусам</h2>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -273,7 +294,7 @@ function Analytics() {
 
 
         <div className="chart-card half">
-          <h2>💳 Методы оплаты</h2>
+          <h2><FiCreditCard className="inline-icon" aria-hidden="true" />Методы оплаты</h2>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -298,7 +319,7 @@ function Analytics() {
       </div>
 
       <div className="chart-card">
-        <h2>📈 Динамика накладных по месяцам</h2>
+        <h2><FiTrendingUp className="inline-icon" aria-hidden="true" />Динамика накладных по месяцам</h2>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={invoicesTrend}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -336,7 +357,7 @@ function Analytics() {
       </div>
 
       <div className="chart-card">
-        <h2>👑 ТОП-10 клиентов по выручке</h2>
+        <h2><FiAward className="inline-icon" aria-hidden="true" />ТОП-10 клиентов по выручке</h2>
         <div className="top-clients-table">
           <table className="glass-table glass-table--compact">
             <thead>
@@ -352,12 +373,7 @@ function Analytics() {
             <tbody>
               {topClients.map((client, index) => (
                 <tr key={client.id}>
-                  <td className="rank">
-                    {index === 0 && '🥇'}
-                    {index === 1 && '🥈'}
-                    {index === 2 && '🥉'}
-                    {index > 2 && index + 1}
-                  </td>
+                  <td className="rank">{renderRankCell(index)}</td>
                   <td className="client-name">
                     <div>{client.name}</div>
                     <div className="client-email">{client.email}</div>
