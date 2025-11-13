@@ -47,7 +47,11 @@ function buildStatusNotificationMessage(invoiceNumber, status) {
   return `\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f №${invoiceNumber}: ${STATUS_TEXT[status] || status}`;
 }
 
-async function notifyStaffAboutNewInvoice({ invoiceId, clientId, invoiceNumber, req }) {
+async function notifyStaffAboutNewInvoice({ invoiceId, clientId, invoiceNumber, req, initiatorRole }) {
+  if (initiatorRole !== 'client') {
+    return;
+  }
+
   try {
     const [[client]] = await db.query('SELECT company_name FROM clients WHERE id = ?', [clientId]);
     const clientName = client?.company_name || 'Клиент';
@@ -83,6 +87,43 @@ async function notifyStaffAboutNewInvoice({ invoiceId, clientId, invoiceNumber, 
     }
   } catch (error) {
     console.error('[invoices] failed to notify staff about new invoice:', error);
+  }
+}
+
+async function notifyClientAboutInvoiceEvent({ clientId, invoiceId, invoiceNumber, type, title, message, req }) {
+  if (!clientId) {
+    return;
+  }
+
+  try {
+    const [clientUsers] = await db.query('SELECT id FROM users WHERE client_id = ?', [clientId]);
+    if (!clientUsers.length) {
+      return;
+    }
+
+    const io = req.app.get('io');
+
+    for (const clientUser of clientUsers) {
+      const [notifResult] = await db.query(
+        'INSERT INTO notifications (user_id, type, title, message, invoice_id) VALUES (?, ?, ?, ?, ?)',
+        [clientUser.id, type, title, message, invoiceId]
+      );
+
+      if (io) {
+        io.to(`user_${clientUser.id}`).emit('new_notification', {
+          id: notifResult.insertId,
+          type,
+          title,
+          message,
+          link: `/invoices/${invoiceId}`,
+          invoice_id: invoiceId,
+          is_read: false,
+          created_at: new Date()
+        });
+      }
+    }
+  } catch (error) {
+    console.error('[invoices] failed to notify client users:', error);
   }
 }
 
@@ -432,7 +473,8 @@ router.post('/', requireRole('admin', 'accountant', 'client'), async (req, res) 
     invoiceId,
     clientId: targetClientId,
     invoiceNumber: invoice_number,
-    req
+    req,
+    initiatorRole: req.user?.role
   });
 
   return res.status(201).json({ id: invoiceId, message: 'Накладная успешно создана' });
@@ -495,6 +537,16 @@ router.put('/:id', requireRole('admin', 'accountant'), async (req, res) => {
           getStatusChangeDescription(existingInvoice.status, nextStatus)
         ]
       );
+
+      await notifyClientAboutInvoiceEvent({
+        clientId: existingInvoice.client_id,
+        invoiceId: Number(req.params.id),
+        invoiceNumber: invoice_number || existingInvoice.invoice_number,
+        type: 'invoice_status',
+        title: NOTIFICATION_TEXT.statusUpdatedTitle,
+        message: buildStatusNotificationMessage(invoice_number || existingInvoice.invoice_number, nextStatus),
+        req
+      });
     } else {
       await db.query(
         'INSERT INTO invoice_logs (invoice_id, user_id, action, old_status, new_status, description) VALUES (?, ?, ?, ?, ?, ?)',
@@ -507,53 +559,19 @@ router.put('/:id', requireRole('admin', 'accountant'), async (req, res) => {
           LOG_DESCRIPTIONS.updated
         ]
       );
+
+      await notifyClientAboutInvoiceEvent({
+        clientId: existingInvoice.client_id,
+        invoiceId: Number(req.params.id),
+        invoiceNumber: invoice_number || existingInvoice.invoice_number,
+        type: 'invoice_update',
+        title: 'Обновление накладной',
+        message: `Накладная №${invoice_number || existingInvoice.invoice_number} была обновлена администратором`,
+        req
+      });
     }
 
-    if (nextStatus !== existingInvoice.status) {
-      const [invoiceRows] = await db.query(
-        `
-        SELECT i.invoice_number, u.id as user_id
-        FROM invoices i
-        LEFT JOIN clients c ON i.client_id = c.id
-        LEFT JOIN users u ON u.client_id = c.id
-        WHERE i.id = ?
-      `,
-        [req.params.id]
-      );
-
-      if (invoiceRows.length > 0 && invoiceRows[0].user_id) {
-        const { invoice_number: updatedNumber, user_id: targetUserId } = invoiceRows[0];
-        const [notifResult] = await db.query(
-          'INSERT INTO notifications (user_id, type, title, message, invoice_id) VALUES (?, ?, ?, ?, ?)',
-          [
-            targetUserId,
-            'invoice_status',
-            NOTIFICATION_TEXT.statusUpdatedTitle,
-            buildStatusNotificationMessage(updatedNumber, nextStatus),
-            req.params.id
-          ]
-        );
-
-        const io = req.app.get('io');
-        if (io) {
-          const payload = {
-            id: notifResult.insertId,
-            type: 'invoice_status',
-            title: NOTIFICATION_TEXT.statusUpdatedTitle,
-            message: buildStatusNotificationMessage(updatedNumber, nextStatus),
-            link: `/invoices/${req.params.id}`,
-            invoice_id: Number(req.params.id),
-            is_read: false,
-            created_at: new Date()
-          };
-          io.to(`user_${targetUserId}`).emit('new_notification', {
-            ...payload
-          });
-        }
-      }
-    }
-
-    res.json({ message: '\u041d\u0430\u043a\u043b\u0430\u0434\u043d\u0430\u044f \u0443\u0441\u043f\u0435\u0448\u043d\u043e \u0443\u0434\u0430\u043b\u0435\u043d\u0430' });
+    res.json({ message: 'Накладная успешно обновлена' });
   } catch (error) {
     console.error('\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u043d\u0430\u043a\u043b\u0430\u0434\u043d\u0443\u044e:', error);
     res.status(500).json({ error: error.message });

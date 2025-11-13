@@ -1017,10 +1017,10 @@ const downloadInvoicePdf = async (invoiceId) => {
                   <h3>Накладные</h3>
                   <div className="value">{stats.invoices?.total_invoices || 0}</div>
                   <div className="label">
-                    Доставлено: <span style= {{color: '#28a745'}}>{stats.invoices?.delivered || 0}</span> | 
-                    В пути: <span style= {{color: '#17a2b8'}}>{stats.invoices?.in_transit || 0}</span> |
-                    Ожидают: <span style= {{color: '#ffc107'}}>{stats.invoices?.pending || 0}</span> |
-                    Отменены: <span style= {{color: '#f87171'}}>{stats.invoices?.cancelled || 0}</span>
+                    Доставлено: <span className="label-accent" style={{color: '#28a745'}}>{stats.invoices?.delivered || 0}</span> | 
+                    В пути: <span className="label-accent" style={{color: '#17a2b8'}}>{stats.invoices?.in_transit || 0}</span> |
+                    Ожидают: <span className="label-accent" style={{color: '#ffc107'}}>{stats.invoices?.pending || 0}</span> |
+                    Отменены: <span className="label-accent" style={{color: '#f87171'}}>{stats.invoices?.cancelled || 0}</span>
                   </div>
                 </div>
                 <div className="stat-card">
@@ -1479,8 +1479,11 @@ const downloadInvoicePdf = async (invoiceId) => {
                       <div className="label label--inline">
                         {card.segments.map((segment, index) => (
                           <React.Fragment key={`${card.id}-${segment.label}`}>
-                            <span style={{color: segment.color}}>
-                              {segment.label}: {segment.value}
+                            <span>
+                              {segment.label}:{" "}
+                              <strong style={{color: segment.color}}>
+                                {segment.value}
+                              </strong>
                             </span>
                             {index < card.segments.length - 1 && (
                               <span className="label-separator">|</span>

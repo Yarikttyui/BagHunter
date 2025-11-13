@@ -948,7 +948,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .label--inline span {
@@ -959,6 +959,10 @@
 .label-separator {
   color: rgba(255, 255, 255, 0.55);
   margin: 0 2px;
+}
+
+.label-accent {
+  font-weight: 700;
 }
 
 .reports-actions-grid {

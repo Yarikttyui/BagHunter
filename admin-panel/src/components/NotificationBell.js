@@ -19,6 +19,7 @@ const API_URL = API_BASE_URL;
 const ICONS = {
   new_invoice: FiFileText,
   invoice_status: FiTruck,
+  invoice_update: FiFileText,
   payment: FiDollarSign,
   comment: FiMessageCircle,
   system: FiCpu,
@@ -28,6 +29,7 @@ const ICONS = {
 const ICON_ACCENTS = {
   new_invoice: "#3b82f6",
   invoice_status: "#6366f1",
+  invoice_update: "#8b5cf6",
   payment: "#22c55e",
   comment: "#f97316",
   warning: "#f59e0b",
@@ -73,6 +75,17 @@ const buildDisplayContent = (notification) => {
         : invoiceNumber
           ? `Накладная №${invoiceNumber}: статус изменён`
           : "Проверьте карточку накладной",
+    };
+  }
+
+  if (notification.type === "invoice_update") {
+    return {
+      title: titleHasRu ? notification.title : "Накладная обновлена",
+      message: messageHasRu
+        ? notification.message
+        : invoiceNumber
+          ? `Накладная №${invoiceNumber} обновлена`
+          : "Данные накладной изменены",
     };
   }
 
