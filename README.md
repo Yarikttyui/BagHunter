@@ -52,7 +52,8 @@ cd BagHunter
 ```bash
 cd backend
 npm install
-4. Создайте файл `.env` в папке backend:
+```
+3. Создайте файл `.env` в папке backend:
 ```
 PORT=5000
 DB_HOST=localhost
@@ -62,15 +63,15 @@ DB_NAME=logistics_accounting
 JWT_SECRET=your_jwt_secret
 ```
 
-5. Установите зависимости для фронтенд приложений:
+4. Установите зависимости для фронтенд приложений:
 ```bash
-cd /admin-panel
+cd admin-panel
 npm install
 
-cd /client-portal
+cd client-portal
 npm install
 
-cd /landing-site
+cd landing-site
 npm install
 ```
 
@@ -111,3 +112,12 @@ npm start
 - `/api/analytics` - Аналитика и статистика
 - `/api/notifications` - Уведомления
 - `/api/comments` - Комментарии
+
+
+<img width="1280" height="451" alt="Вход в личный кабинет клиента" src="https://github.com/user-attachments/assets/58aa0b59-3917-442a-b8eb-7fd428821039" />
+<img width="1280" height="450" alt="Вход в админ панель" src="https://github.com/user-attachments/assets/052b43a3-b118-46e7-9b5a-ae2c0148a595" />
+<img width="1280" height="453" alt="Админ панель" src="https://github.com/user-attachments/assets/e22c5dda-eb93-4e19-97c0-f3101a5b8cbd" />
+<img width="1280" height="449" alt="Клиентская панель" src="https://github.com/user-attachments/assets/666df3e9-ef19-4152-99b0-0970c14a7c2a" />
+<img width="1002" height="1142" alt="Накладная" src="https://github.com/user-attachments/assets/4eb761bc-f9bf-4c30-9d27-a3bf1fd66210" />
+<img width="1280" height="452" alt="Лендинг" src="https://github.com/user-attachments/assets/7659bb4e-d74d-4f50-8ebf-683daa528715" />
+
