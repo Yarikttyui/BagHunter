@@ -14,11 +14,6 @@ import {
   FiHome,
   FiShield,
   FiArchive,
-  FiTruck,
-  FiDollarSign,
-  FiBarChart2,
-  FiFileText,
-  FiClipboard,
 } from "react-icons/fi";
 
 const CATEGORY_ROTATION_DELAY = 3500;
@@ -150,73 +145,6 @@ const cargoCategories = [
   },
 ];
 
-const featureCards = [
-  {
-    icon: FiTruck,
-
-    title: "Трекинг 24/7",
-
-    description:
-      "Каждая накладная и рейс видны на карте, а статусы синхронизируются с клиентским порталом.",
-  },
-
-  {
-    icon: FiDollarSign,
-
-    title: "Прозрачные финансы",
-
-    description:
-      "Расчёт стоимости, предоплаты и закрывающие документы формируются автоматически.",
-  },
-
-  {
-    icon: FiBarChart2,
-
-    title: "Аналитика и прогнозы",
-
-    description:
-      "Видите выручку по периодам, KPI по складам и прогноз загрузки на несколько недель вперёд.",
-  },
-
-  {
-    icon: FiPackage,
-
-    title: "Единый контроль цепочки",
-
-    description:
-      "От заявки и упаковки до приёмки — всё в одной системе с ролями и правами доступа.",
-  },
-];
-
-const automationCards = [
-  {
-    icon: FiFileText,
-
-    title: "PDF-накладные",
-
-    description:
-      "Документы собираются на лету через PDFKit с фирменным стилем, штрихкодами и подписями.",
-  },
-
-  {
-    icon: FiClipboard,
-
-    title: "Excel-отчёты",
-
-    description:
-      "Финансовые отчёты готовятся в ExcelJS: формулы, цвета, защитные листы и сводные данные.",
-  },
-
-  {
-    icon: FiArchive,
-
-    title: "История изменений",
-
-    description:
-      "Каждый статус фиксируется в журнале — видно кто и когда обновил накладную или комментарий.",
-  },
-];
-
 const stats = [
   { value: "500+", label: "выполненных проектов" },
 
@@ -334,50 +262,8 @@ const Home = () => {
         </div>
       </section>
 
-      <section className="features-section">
-        <h2 className="section-title">Почему нас выбирают</h2>
-
-        <div className="features-grid">
-          {featureCards.map((feature) => {
-            const Icon = feature.icon;
-
-            return (
-              <article className="feature-card" key={feature.title}>
-                <div className="feature-icon" aria-hidden="true">
-                  <Icon />
-                </div>
-
-                <h3>{feature.title}</h3>
-
-                <p>{feature.description}</p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="features-section">
-        <h2 className="section-title">Документы и автоматизация</h2>
-
-        <div className="features-grid">
-          {automationCards.map((card) => {
-            const Icon = card.icon;
-
-            return (
-              <article className="feature-card" key={card.title}>
-                <div className="feature-icon" aria-hidden="true">
-                  <Icon />
-                </div>
-
-                <h3>{card.title}</h3>
-
-                <p>{card.description}</p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
+      
+      
       <footer className="footer">
         <p>
           &copy; {new Date().getFullYear()} BagHunter Logistics. Все права

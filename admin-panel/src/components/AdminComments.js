@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { FiMessageCircle, FiLock, FiSend, FiTrash2, FiLoader } from 'react-icons/fi';
 import './Comments.css';
@@ -12,6 +12,7 @@ function AdminComments({ invoiceId, user }) {
   const [isInternal, setIsInternal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const internalToggleId = useMemo(() => `internal-note-${invoiceId}`, [invoiceId]);
 
   const fetchComments = async () => {
     if (!user?.id) {
@@ -111,15 +112,27 @@ function AdminComments({ invoiceId, user }) {
         />
 
         <div className="form-actions">
-          <label className="internal-checkbox">
+          <label
+            className={`internal-toggle ${isInternal ? 'internal-toggle--active' : ''}`}
+            htmlFor={internalToggleId}
+          >
             <input
+              id={internalToggleId}
               type="checkbox"
               checked={isInternal}
               onChange={(e) => setIsInternal(e.target.checked)}
             />
-            <span>
-              <FiLock className="inline-icon" aria-hidden="true" />
-              Внутренняя заметка (видно только админам/бухгалтерам)
+            <span className="internal-toggle__indicator" aria-hidden="true">
+              <span className="internal-toggle__thumb" />
+            </span>
+            <span className="internal-toggle__copy">
+              <span className="internal-toggle__title">
+                <FiLock className="inline-icon" aria-hidden="true" />
+                Внутренняя заметка
+              </span>
+              <span className="internal-toggle__subtitle">
+                (видно только админам/бухгалтерам)
+              </span>
             </span>
           </label>
 

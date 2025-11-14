@@ -2098,7 +2098,13 @@ const downloadInvoicePdf = async (invoiceId) => {
       {showInvoiceDetails && selectedInvoiceDetails && (
         <div className="modal-overlay" onClick={() => setShowInvoiceDetails(false)}>
           <div className="modal-content large-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setShowInvoiceDetails(false)}>×</button>
+            <button
+              className="modal-close"
+              onClick={() => setShowInvoiceDetails(false)}
+              aria-label="Закрыть окно деталей накладной"
+            >
+              ×
+            </button>
             
             <div className="invoice-details">
               <div className="invoice-header">

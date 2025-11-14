@@ -548,7 +548,10 @@ function Dashboard({ user, onLogout }) {
                 onClick={() => setShowCreateModal(false)}
                 title="Закрыть"
               >
-                <FiX aria-hidden="true" />
+                <span className="modal-close-btn__icon" aria-hidden="true">
+                  <FiX />
+                </span>
+                <span className="modal-close-btn__label">Выйти</span>
               </button>
             </div>
 
