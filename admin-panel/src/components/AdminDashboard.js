@@ -994,9 +994,6 @@ const downloadInvoicePdf = async (invoiceId) => {
 
       <div className="admin-main">
         <div className="admin-header">
-          <div className="header-search">
-            <input type="text" placeholder="Поиск..." />
-          </div>
           <div className="header-right">
             <NotificationBell user={user} onNotificationClick={handleNotificationClick} />
           </div>
@@ -1016,12 +1013,29 @@ const downloadInvoicePdf = async (invoiceId) => {
                 <div className="stat-card">
                   <h3>Накладные</h3>
                   <div className="value">{stats.invoices?.total_invoices || 0}</div>
-                  <div className="label">
-                    Доставлено: <span className="label-accent" style={{color: '#28a745'}}>{stats.invoices?.delivered || 0}</span> | 
-                    В пути: <span className="label-accent" style={{color: '#17a2b8'}}>{stats.invoices?.in_transit || 0}</span> |
-                    Ожидают: <span className="label-accent" style={{color: '#ffc107'}}>{stats.invoices?.pending || 0}</span> |
-                    Отменены: <span className="label-accent" style={{color: '#f87171'}}>{stats.invoices?.cancelled || 0}</span>
+                  <div className="label label--statuses">
+                    Статусы:{' '}
+                    Доставлено:{' '}
+                    <span className="status-count status-count--delivered">
+                      {stats.invoices?.delivered || 0}
+                    </span>{' '}
+                    <span className="status-separator">|</span>{' '}
+                    В пути:{' '}
+                    <span className="status-count status-count--in-transit">
+                      {stats.invoices?.in_transit || 0}
+                    </span>{' '}
+                    <span className="status-separator">|</span>{' '}
+                    Ожидают:{' '}
+                    <span className="status-count status-count--pending">
+                      {stats.invoices?.pending || 0}
+                    </span>{' '}
+                    <span className="status-separator">|</span>{' '}
+                    Отменены:{' '}
+                    <span className="status-count status-count--cancelled">
+                      {stats.invoices?.cancelled || 0}
+                    </span>
                   </div>
+
                 </div>
                 <div className="stat-card">
                   <h3>Доходы</h3>
@@ -1067,7 +1081,12 @@ const downloadInvoicePdf = async (invoiceId) => {
                   </thead>
                   <tbody>
                     {sortedInvoices.slice(0, 5).map((invoice) => (
-                      <tr key={invoice.id}>
+                      <tr
+                        key={invoice.id}
+                        className="glass-table__row--clickable"
+                        onClick={() => viewInvoiceDetails(invoice.id)}
+                        title="Открыть подробности накладной"
+                      >
                         <td>{invoice.invoice_number}</td>
                         <td>{invoice.client_name}</td>
                         <td>{formatDate(invoice.invoice_date)}</td>
@@ -1438,30 +1457,56 @@ const downloadInvoicePdf = async (invoiceId) => {
                   <div className="stat-card__list">
                     <div className="stat-card__list-item">
                       <span className="stat-card__list-label">Общий доход</span>
-                      <span className="stat-card__list-value text-positive">{formatCurrency(stats.income)}</span>
+                      <span className="stat-card__list-value stat-card__list-value--income">
+                        {formatCurrency(stats.income)}
+                      </span>
                     </div>
                     <div className="stat-card__list-item">
                       <span className="stat-card__list-label">Общие расходы</span>
-                      <span className="stat-card__list-value text-negative">{formatCurrency(stats.expense)}</span>
+                      <span className="stat-card__list-value stat-card__list-value--expense">
+                        {formatCurrency(stats.expense)}
+                      </span>
                     </div>
                     <div className="stat-card__list-item">
                       <span className="stat-card__list-label">Чистая прибыль</span>
                       <span
-                        className={`stat-card__list-value ${stats.profit >= 0 ? 'text-positive' : 'text-negative'}`}
+                        className={`stat-card__list-value ${
+                          stats.profit >= 0
+                            ? 'stat-card__list-value--income'
+                            : 'stat-card__list-value--expense'
+                        }`}
                       >
                         {formatCurrency(stats.profit)}
                       </span>
                     </div>
                     <div className="stat-card__list-item">
                       <span className="stat-card__list-label">Всего накладных</span>
-                      <span className="stat-card__list-value">
+                      <span className="stat-card__list-value stat-card__list-value--info">
                         {stats.invoices?.total_invoices || 0}
                       </span>
                     </div>
                     <div className="stat-card__list-item">
                       <span className="stat-card__list-label">Статусы</span>
-                      <span className="stat-card__list-value">
-                        Доставлено: {stats.invoices?.delivered || 0} | В пути: {stats.invoices?.in_transit || 0} | Ожидают: {stats.invoices?.pending || 0} | Отменены: {stats.invoices?.cancelled || 0}
+                      <span className="stat-card__list-value stat-card__list-value--statuses">
+                        Доставлено:{' '}
+                        <span className="status-count status-count--delivered">
+                          {stats.invoices?.delivered || 0}
+                        </span>{' '}
+                        <span className="status-separator">|</span>{' '}
+                        В пути:{' '}
+                        <span className="status-count status-count--in-transit">
+                          {stats.invoices?.in_transit || 0}
+                        </span>{' '}
+                        <span className="status-separator">|</span>{' '}
+                        Ожидают:{' '}
+                        <span className="status-count status-count--pending">
+                          {stats.invoices?.pending || 0}
+                        </span>{' '}
+                        <span className="status-separator">|</span>{' '}
+                        Отменены:{' '}
+                        <span className="status-count status-count--cancelled">
+                          {stats.invoices?.cancelled || 0}
+                        </span>
                       </span>
                     </div>
                   </div>
